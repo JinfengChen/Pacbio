@@ -1,6 +1,6 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=2
-#PBS -l mem=2gb
+#PBS -l nodes=1:ppn=4
+#PBS -l mem=4gb
 #PBS -l walltime=100:00:00
 #PBS -j oe
 #PBS -V
@@ -18,11 +18,11 @@ fq_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Lambda_Phase/
 lib_name=lambda
 gsize=50000
 
-#$PBcR_bin/PBcR -threads 2 -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
+$PBcR_bin/PBcR -threads 2 -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
 
 ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Lambda_Phase/sampleData/reference.fasta
 asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/PBcR/lambda/9-terminator/asm.ctg.fasta
-/usr/local/bin/dnadiff $ref $asm
+#/usr/local/bin/dnadiff $ref $asm
 
 end=`date +%s`
 runtime=$((end-start))

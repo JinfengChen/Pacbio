@@ -1,11 +1,12 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=16
+#PBS -l nodes=1:ppn=8
 #PBS -l mem=64gb
 #PBS -l walltime=100:00:00
 #PBS -j oe
 #PBS -V
+#PBS -d ./
 
-cd $PBS_O_WORKDIR
+#cd $PBS_O_WORKDIR
 
 
 start=`date +%s`
@@ -16,8 +17,8 @@ PATH=$PATH:/bigdata/cjinfeng/00.RD/Assembly/Pacbio/install/FALCON/DALIGNER/DALIG
 
 python fc_run.py fc_run_ecoli.cfg 
 
-#ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Ecoli/selfSampleData/reference.fasta
-#asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/PBcR/K12/9-terminator/asm.ctg.fasta
+#ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Yeast/W303.ref.fa
+#asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/FALCON/yeast_test/2-asm-falcon/p_ctg.fa
 #/usr/local/bin/dnadiff $ref $asm
 
 end=`date +%s`

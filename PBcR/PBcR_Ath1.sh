@@ -13,10 +13,10 @@ start=`date +%s`
 module load java/1.8.0_25
 
 PBcR_bin=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/wgs-8.3rc2/Linux-amd64/bin
-spec_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Ecoli/selfSampleData/pacbio.spec
-fq_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Ecoli/selfSampleData/pacbio_filtered.fastq
-lib_name=K12
-gsize=4650000
+spec_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Arabidopsis/pacbio.1.spec
+fq_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Arabidopsis/Pacbio.fastq
+lib_name=Ath1
+gsize=135000000
 
 #pacbio.spec
 ## limit to 32GB. By default the pipeline will auto-detect memory and try to use maximum. This allow limiting it
@@ -25,11 +25,11 @@ gsize=4650000
 #merylMemory = 32000
 
 #fast consensus (-pbCNS parameter)
-#$PBcR_bin/PBcR -threads 16 -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
+$PBcR_bin/PBcR -threads 16 -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
 
-ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Ecoli/selfSampleData/reference.fasta
-asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/PBcR/K12/9-terminator/asm.ctg.fasta
-/usr/local/bin/dnadiff $ref $asm
+#ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Lambda_Phase/sampleData/reference.fasta
+#asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/PBcR/lambda/9-terminator/asm.ctg.fasta
+#/usr/local/bin/dnadiff $ref $asm
 
 end=`date +%s`
 runtime=$((end-start))

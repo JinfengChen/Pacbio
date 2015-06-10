@@ -1,6 +1,6 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=16
-#PBS -l mem=128gb
+#PBS -l nodes=1:ppn=32
+#PBS -l mem=64gb
 #PBS -l walltime=100:00:00
 #PBS -j oe
 #PBS -V
@@ -13,7 +13,7 @@ start=`date +%s`
 module load java/1.8.0_25
 
 PBcR_bin=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/wgs-8.3rc2/Linux-amd64/bin
-spec_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Arabidopsis/pacbio.spec
+spec_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Arabidopsis/pacbio.test.spec
 fq_file=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Arabidopsis/Pacbio.fastq
 lib_name=Ath
 gsize=135000000
@@ -25,7 +25,7 @@ gsize=135000000
 #merylMemory = 32000
 
 #fast consensus (-pbCNS parameter)
-$PBcR_bin/PBcR -threads 16 -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
+$PBcR_bin/PBcR -threads $PBS_NP -length 500 -partitions 200 -l $lib_name -s $spec_file -fastq $fq_file genomeSize=$gsize
 
 #ref=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/Testing_Data/Lambda_Phase/sampleData/reference.fasta
 #asm=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/PBcR/lambda/9-terminator/asm.ctg.fasta

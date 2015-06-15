@@ -1,13 +1,14 @@
 #!/usr/bin/perl
 =header
-The scripts is designed to run bwa to map solexa sequencing read to reference genome.
-Fastq file is split into small files and use qsub to run in biocluster. So just run *.sh in local machine. *.sh could be generate by runMapping.pl.
+Map Pacbio reads bax.h5 reads to assembly. Generate cmp.h5 and bam file. cmp.h5 can be used to polish assembly using quiver.  
 USE fullpath of files.
 --ref:   reference sequence
---1:     paired read with -2, SRR034638_1.fastq
---2:     paired read with -1, SRR034638_2.fastq
---tool:  mapping tools: bwa, maq, ssaha, soap
+--input: fofn file which list all SMRT cell each include *.p0.1/2/3.bax.h5
+--tool:  mapping tools: pbalign
+--split: how many sequence in each sub fasta file
 -project: project name that used for result file 
+
+perl step1_Mapping_h5_pbalign.pl --ref /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/yeast_ass.fa --input /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/input.yeast.fofn --output yeast_ass_reads --project yeast_ass_reads --verbose > log 2>&1 &
 =cut
 
 use Getopt::Long;
@@ -27,8 +28,6 @@ if ($opt{help} or keys %opt < 1){
 
 $opt{tool} ||= "pbalign";
 $opt{cpu} ||=12;
-$opt{min} ||= 0;
-$opt{max} ||= 500; 
 $opt{split} ||= 2000;
 
 unless ($opt{project}){
@@ -65,6 +64,7 @@ if (exists $opt{input}){
       my @map;
       my @fqs = @h5files;
       my @cmph5;
+      my @samdirs;
       for(my $i=0; $i<@fqs; $i+=1){
            print "$i\t$fqs[$i]\n";
            #my $prefix=substr(basename($fqs[$i]),0,3);
@@ -73,54 +73,43 @@ if (exists $opt{input}){
            my $temp_sam="$opt{output}/$prefix.tempdir";
            push @map, "$pbalign --forQuiver --tmpDir $temp_sam --nproc 4 $fqs[$i] $opt{ref} $opt{output}/$prefix.cmp.h5";
            push @cmph5, "$opt{output}/$prefix.cmp.h5";
+           push @samdirs, $temp_sam;
            #push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
       }
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 30 --lines 1 --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=12g --convert no $opt{project}.map.sh`;
+      #`perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 30 --lines 1 --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=12g --convert no $opt{project}.map.sh`;
 
       ### merge and clean tmp files
       my @merge;
       my $cmph5_files = join(" ", @cmph5);
-      push @merge, "python $python_bin/cmph5tools.py merge --outFile $opt{output}.cmp.h5 $cmph5_files";
-      push @merge, "python $python_bin/cmph5tools.py sort --deep $opt{output}.cmp.h5 --outFile $opt{output}.cmp.dsort.h5 --tmpDir $tempdir";
-      #push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
-      #push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
+      push @merge, "python $python_bin/cmph5tools.py merge --outFile $opt{output}.cmp.h5 $cmph5_files" unless (-e "$opt{output}.cmp.h5");
+      push @merge, "python $python_bin/cmph5tools.py sort --deep $opt{output}.cmp.h5 --outFile $opt{output}.cmp.dsort.h5 --tmpDir $tempdir" unless (-e "$opt{output}.cmp.dsort.h5");
+      my @samfiles = getsamfiles(\@samdirs);
+      unless (-e "$opt{output}.sam"){
+          push (@merge, "grep \"^@\" $samfiles[0] > $opt{output}.sam");
+          for (my $i=0; $i<@samfiles;$i++){
+              push (@merge, "cat $samfiles[$i] | grep -v \"^@\" >> $opt{output}.sam");
+          }
+      }
+      push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
+      push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
       #push (@merge, "java -Xmx5G -jar $rmdup ASSUME_SORTED=TRUE REMOVE_DUPLICATES=TRUE VALIDATION_STRINGENCY=LENIENT INPUT=$opt{output}.sort.bam OUTPUT=$opt{output}.bam METRICS_FILE=$opt{output}.dupli > $opt{output}.rmdup.log 2> $opt{output}.rmdup.log2") unless (-e "$opt{output}.bam");
       #push (@merge, "$SAMtool index $opt{output}.bam");
       my $cmd2=join("\n",@merge);
       writefile("$opt{project}.merge.sh","$cmd2\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      #`perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
 
       ### clear tmp files
       my @clear;
-      #push @clear, "rm $opt{output}.sam $opt{output}.temp.sam $opt{output}.header $opt{output}.raw.bam $opt{output}.sort.bam";
-      #push @clear, "rm $opt{output}.*.log* $opt{1}.sai $opt{1}.bwa.log2 $opt{2}.sai $opt{2}.bwa.log2";
-      #push @clear, "rm $opt{output} $opt{output}.map.sh* $opt{output}.split.sh* $opt{output}.merge.sh* -R";
-      #my $cmd3=join("\n",@clear);
-      #writefile("$opt{project}.clear.sh","$cmd3\n");
-      #unless ($opt{verbose}){
-      #    `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 3 --interval 120 --convert no $opt{project}.clear.sh`;
-      #}
-=cut
-      print "Align Read 1!\n";
-      `$bwa/bwa aln -t $opt{cpu} $opt{ref} $opt{1} > $opt{1}.sai 2> $opt{1}.bwa.log2`;
-      print "Align Read 2!\n";
-      `$bwa/bwa aln -t $opt{cpu} $opt{ref} $opt{2} > $opt{2}.sai 2> $opt{2}.bwa.log2`;
-      print "Pairing!\n";
-      `$bwa/bwa sampe -a $opt{max} $opt{ref} $opt{1}.sai $opt{2}.sai $opt{1} $opt{2} > $opt{project}.sam 2> $opt{project}.sampe.log2`;
-      print "SAM 2 BAM!\n";
-      `$SAMtool view -bS -o $opt{project}.raw.bam $opt{project}.sam > $opt{project}.convert.log 2> $opt{project}.convert.log2`;
-      print "Sort Bam!\n";
-      `$SAMtool sort $opt{project}.raw.bam $opt{project}.sort > $opt{project}.sort.log 2> $opt{project}.sort.log2`;
-      print "Remove duplicate!\n";
-      `java -jar $rmdup ASSUME_SORTED=TRUE REMOVE_DUPLICATES=TRUE VALIDATION_STRINGENCY=LENIENT INPUT=$opt{project}.sort.bam OUTPUT=$opt{project}.bam METRICS_FILE=$opt{project}.dupli > $opt{project}.rmdup.log 2> $opt{project}.rmdup.log2`;
+      push @clear, "rm $opt{output}.sam $opt{output}.raw.bam";
+      push @clear, "rm $opt{output}.sort.* $opt{output}.convert.*";
+      push @clear, "rm $opt{output} $opt{output}.map.sh* $opt{output}.merge.sh* -R";
+      my $cmd3=join("\n",@clear);
+      writefile("$opt{project}.clear.sh","$cmd3\n");
       unless ($opt{verbose}){
-          `rm $opt{project}.sam $opt{project}.raw.bam $opt{project}.sort.bam`;
-          `rm $opt{project}.*.log* $opt{project}.dupli $opt{1}.sai $opt{1}.bwa.log2 $opt{2}.sai $opt{2}.bwa.log2`;
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 3 --interval 120 --convert no $opt{project}.clear.sh`;
       }
-      print "Done!\n";
-=cut
    }elsif($opt{tool}=~/soap/){ # soap
       print "Run pair-end mapping by soap!\n";
       unless (-e "$opt{ref}.index.sai"){
@@ -169,6 +158,25 @@ my ($file,$line)=@_;
 open WR, ">$file" or die "$!";
      print WR "$line";
 close WR;
+}
+
+#in each sam directory get the sam file with smaller size, which is filtered
+sub getsamfiles
+{
+my ($subdir) = @_;
+my @bams;
+my %hash;
+for (my $i=0;$i<@$subdir;$i++){
+    my @tempbam = glob("$subdir->[$i]/*.sam");
+    for (my $j=0;$j<@tempbam;$j++){
+        $hash{$tempbam[$j]} = -s $tempbam[$j];
+    }
+    my @sortbam = sort {$hash{$a} <=> $hash{$b}} keys %hash;
+    print $sortbam[0], "\t", $hash{$sortbam[0]}, "\n";
+    print $sortbam[1], "\t", $hash{$sortbam[1]}, "\n";
+    push @bams, $sortbam[0];
+}
+return @bams;
 }
 
 #read inputfofn file, which is a list of multi SMRT cell file including three bax.h5 file of each SMRT cell

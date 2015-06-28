@@ -45,11 +45,11 @@ my $blasr="/opt/blasr/453c25ab/bin//blasr";
 my $soap="/usr/local/bin";
 my $ssaha="/home/jfchen/software/ssaha2_v2.5.5_x86_64/";
 my $maq="/opt/tyler/bin/maq";
-my $pbalign="/opt/Python/2.7.3/bin/pbalign";
-my $python_bin="/rhome/cjinfeng/software/tools/pythonlib/bin";
+my $pbalign="/opt/linux/centos/7.x/x86_64/pkgs/python/2.7.5/bin/pbalign";
+my $python_bin="/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/pythonlib/bin";
 my $fqsplit="/rhome/cjinfeng/software/bin/fastq_split.pl";
 my $fasplit="$Bin/fastaDeal.pl";
-my $SAMtool="/usr/local/bin/samtools";
+my $SAMtool="/opt/tyler/bin/samtools";
 my $rmdup="/opt/picard/1.81/MarkDuplicates.jar";
 
 if (exists $opt{input}){
@@ -78,7 +78,7 @@ if (exists $opt{input}){
       }
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
-      #`perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 30 --lines 1 --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=12g --convert no $opt{project}.map.sh`;
+      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 40 --lines 1 --interval 120 --resource nodes=1:ppn=12,walltime=100:00:00,mem=30g --convert no $opt{project}.map.sh`;
 
       ### merge and clean tmp files
       my @merge;
@@ -98,7 +98,7 @@ if (exists $opt{input}){
       #push (@merge, "$SAMtool index $opt{output}.bam");
       my $cmd2=join("\n",@merge);
       writefile("$opt{project}.merge.sh","$cmd2\n");
-      #`perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
 
       ### clear tmp files
       my @clear;
@@ -195,6 +195,7 @@ while(<IN>){
     next if ($_=~/^$/);
     my @unit=split("\t",$_);
     if ($unit[0]=~/\/(.*?)\.\d+\.bax\.h5/){
+    #if ($unit[0]=~/\/(.*?)\.bas\.h5/){
         push @{$hash{$1}}, $unit[0];
     }
     print "$unit[0]\n";

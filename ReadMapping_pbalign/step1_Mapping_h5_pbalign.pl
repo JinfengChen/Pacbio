@@ -18,7 +18,7 @@ use FindBin qw ($Bin);
 
 
 my %opt;
-GetOptions(\%opt,"ref:s","input:s","tool:s","cpu:s","bam","verbose","output:s", "split:s", "project:s","help");
+GetOptions(\%opt,"ref:s","input:s","tool:s","cpu:s","bam","verbose","output:s", "split:s", "step:s","project:s","help");
 
 if ($opt{help} or keys %opt < 1){
    print "Usage: perl $0 -ref fullpath/all.con -1 fullpath/1.fq -2 fullpath/2.fq -min 0 -max 500 -cpu 12 -tool bwa\n";
@@ -38,7 +38,7 @@ unless ($opt{project}){
 $opt{output} = File::Spec->rel2abs("$opt{project}");
 my $tempdir = File::Spec->rel2abs("./tempdir");
 `mkdir $opt{output}` unless (-d $opt{output});
-
+`mkdir "$opt{output}\_cmp_split"` unless (-d "$opt{output}\_cmp_split");
 
 my $bwa="/opt/tyler/bin/";
 my $blasr="/opt/blasr/453c25ab/bin//blasr";
@@ -51,6 +51,8 @@ my $fqsplit="/rhome/cjinfeng/software/bin/fastq_split.pl";
 my $fasplit="$Bin/fastaDeal.pl";
 my $SAMtool="/opt/tyler/bin/samtools";
 my $rmdup="/opt/picard/1.81/MarkDuplicates.jar";
+my $loadchemistry='/opt/linux/centos/7.x/x86_64/pkgs/python/2.7.5/bin/loadChemistry.py';
+my $loadpulses='/opt/blasr/453c25ab/bin/loadPulses';
 
 if (exists $opt{input}){
    if ($opt{tool}=~/pbalign/){
@@ -71,42 +73,66 @@ if (exists $opt{input}){
            my $temp=basename($fqs[$i]);
            my $prefix=$1 if ($temp=~/^(.*)\.fofn/);
            my $temp_sam="$opt{output}/$prefix.tempdir";
-           push @map, "$pbalign --forQuiver --tmpDir $temp_sam --nproc 4 $fqs[$i] $opt{ref} $opt{output}/$prefix.cmp.h5";
+           push @map, "$pbalign -vv --forQuiver --tmpDir $temp_sam --nproc 4 $fqs[$i] $opt{ref} $opt{output}/$prefix.cmp.h5";
            push @cmph5, "$opt{output}/$prefix.cmp.h5";
            push @samdirs, $temp_sam;
            #push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
       }
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 40 --lines 1 --interval 120 --resource nodes=1:ppn=12,walltime=100:00:00,mem=30g --convert no $opt{project}.map.sh`;
+      if ($opt{step}=~/1/){
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 40 --lines 1 --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=20g --convert no $opt{project}.map.sh`;
+      }
 
       ### merge and clean tmp files
       my @merge;
       my $cmph5_files = join(" ", @cmph5);
       push @merge, "python $python_bin/cmph5tools.py merge --outFile $opt{output}.cmp.h5 $cmph5_files" unless (-e "$opt{output}.cmp.h5");
-      push @merge, "python $python_bin/cmph5tools.py sort --deep $opt{output}.cmp.h5 --outFile $opt{output}.cmp.dsort.h5 --tmpDir $tempdir" unless (-e "$opt{output}.cmp.dsort.h5");
-      my @samfiles = getsamfiles(\@samdirs);
-      unless (-e "$opt{output}.sam"){
-          push (@merge, "grep \"^@\" $samfiles[0] > $opt{output}.sam");
-          for (my $i=0; $i<@samfiles;$i++){
-              push (@merge, "cat $samfiles[$i] | grep -v \"^@\" >> $opt{output}.sam");
+      #push @merge, "python $python_bin/cmph5tools.py sort --deep $opt{output}.cmp.h5 --outFile $opt{output}.cmp.dsort.h5 --tmpDir $tempdir" unless (-e "$opt{output}.cmp.dsort.h5");
+      push @merge, "python $python_bin/cmph5tools.py select --groupBy=Reference --outDir $opt{output}\_cmp_split $opt{output}.cmp.h5";
+      if ($opt{bam}){
+          my @samfiles = getsamfiles(\@samdirs);
+          unless (-e "$opt{output}.sam"){
+              push (@merge, "grep \"^@\" $samfiles[0] > $opt{output}.sam");
+              for (my $i=0; $i<@samfiles;$i++){
+                  push (@merge, "cat $samfiles[$i] | grep -v \"^@\" >> $opt{output}.sam");
+              }
           }
+          push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
+          push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
       }
-      push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
-      push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
       #push (@merge, "java -Xmx5G -jar $rmdup ASSUME_SORTED=TRUE REMOVE_DUPLICATES=TRUE VALIDATION_STRINGENCY=LENIENT INPUT=$opt{output}.sort.bam OUTPUT=$opt{output}.bam METRICS_FILE=$opt{output}.dupli > $opt{output}.rmdup.log 2> $opt{output}.rmdup.log2") unless (-e "$opt{output}.bam");
       #push (@merge, "$SAMtool index $opt{output}.bam");
       my $cmd2=join("\n",@merge);
       writefile("$opt{project}.merge.sh","$cmd2\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      if ($opt{step}=~/2/){
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      }
+
+      ###split and sort cmp.h5 files
+      my @cmph5_split_files = glob("$opt{output}\_cmp_split/*.cmp.h5");
+      my @sort_split;
+      for (my $i=0; $i<@cmph5_split_files; $i++){
+          my $contig = $cmph5_split_files[$i] =~ /(.*)\.cmp\.h5/ ? $1 : 'NA';
+          push @sort_split, "python $python_bin/cmph5tools.py sort --deep $contig.cmp.h5 --outFile $contig.sort.cmp.h5 --tmpDir $tempdir";
+          #cmph5tools in path of qsub, no need to do load* here
+          #push @sort_split, "$loadpulses $opt{input} $contig.sort.cmp.h5 -metrics DeletionQV,DeletionTag,InsertionQV,MergeQV,SubstitutionQV";
+          #push @sort_split, "$loadchemistry $opt{input} $contig.sort.cmp.h5";
+      } 
+      my $cmd3=join("\n",@sort_split);
+      writefile("$opt{project}.sort_split.sh","$cmd3\n");
+      if ($opt{step}=~/3/){
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --maxjob 40 --lines 6 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.sort_split.sh`;
+      }
 
       ### clear tmp files
       my @clear;
       push @clear, "rm $opt{output}.sam $opt{output}.raw.bam";
       push @clear, "rm $opt{output}.sort.* $opt{output}.convert.*";
       push @clear, "rm $opt{output} $opt{output}.map.sh* $opt{output}.merge.sh* -R";
-      my $cmd3=join("\n",@clear);
-      writefile("$opt{project}.clear.sh","$cmd3\n");
+      push @clear, "rm $opt{output}.sort_split.sh* -R";
+      my $cmd4=join("\n",@clear);
+      writefile("$opt{project}.clear.sh","$cmd4\n");
       unless ($opt{verbose}){
           `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 3 --interval 120 --convert no $opt{project}.clear.sh`;
       }

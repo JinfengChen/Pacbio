@@ -1,0 +1,3 @@
+cat /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver/*.consensus.fasta > /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver.consensus.fasta
+cat /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver/*.consensus.fastq > /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver.consensus.fastq
+cat /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver/*.gff > /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/GenomicConsensus/Testing_data/yeast_quiver.gff

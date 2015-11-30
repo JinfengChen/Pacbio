@@ -11,3 +11,6 @@ python plot_chr_density.py --input SWO.vcf.tab.het.1chr.density
 #run for all strain by run.sh
 qsub run.sh
 
+echo "Ancestral analysis"
+python AncesterAnalysis.py --input ../input/nbt.2906-S2.txt
+

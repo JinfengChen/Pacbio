@@ -49,8 +49,7 @@ def plot_density(prefix, density, chromosome):
 pdf("%s.pdf", width = 10, height = 4)
 x <- read.table("%s", header=TRUE)
 y <- read.table("%s")
-plot(x[,2]/1000000, x[,5], col='cadetblue', type='l', main="", xlab="Chromosomal Position (Mb)",  ylab="Heterozygous site/kb", xlim=c(0, 290), ylim=c(0, 30), 
-frame.plot=FALSE)
+plot(x[,2]/1000000, x[,5], col='cadetblue', type='l', main="", xlab="Chromosomal Position (Mb)",  ylab="Heterozygous site/kb", xlim=c(0, 290), ylim=c(0, 30), frame.plot=FALSE)
 for (i in y[,2]){
 abline(v=i/1000000, col='gray', lty=3)
 }
@@ -61,6 +60,18 @@ dev.off()
     ofile.close()
     os.system('cat %s.R | R --slave' %(prefix))
 
+def plot_distri(prefix, density):
+    R='''
+pdf("%s.distri.pdf", width = 10, height = 4)
+x <- read.table("%s", header=TRUE)
+plot(density(x[,5]), xlab="Heterozygous site/kb", ylab="Frequency")
+dev.off()
+''' %(prefix, density)
+    ofile = open('%s.distri.R' %(prefix), 'w')
+    print >> ofile, R
+    ofile.close()
+    os.system('cat %s.distri.R | R --slave' %(prefix))
+    
 
 def main():
     parser = argparse.ArgumentParser()
@@ -76,6 +87,7 @@ def main():
     prefix = os.path.splitext((os.path.basename(args.input)))[0]
     #print prefix
     plot_density(prefix, args.input, 'Cclementina_v1.0_scaffolds.chrlen.1chr')
+    plot_distri(prefix, args.input)
 
 if __name__ == '__main__':
     main()

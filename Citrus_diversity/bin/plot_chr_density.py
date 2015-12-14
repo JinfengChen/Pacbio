@@ -51,7 +51,7 @@ x <- read.table("%s", header=TRUE)
 y <- read.table("%s")
 plot(x[,2]/1000000, x[,5], col='cadetblue', type='l', main="", xlab="Chromosomal Position (Mb)",  ylab="Heterozygous site/kb", xlim=c(0, 290), ylim=c(0, 30), frame.plot=FALSE)
 for (i in y[,2]){
-abline(v=i/1000000, col='gray', lty=3)
+abline(v=i/1000000, col='black', lty=3)
 }
 dev.off()
 ''' %(prefix, density, chromosome)

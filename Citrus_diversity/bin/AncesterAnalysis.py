@@ -25,23 +25,29 @@ def runjob(script, lines):
     os.system(cmd)
 
 '''
-#CHROM  POS     REF     CLM
-scaffold_1      54      CC      CA/CA
-scaffold_1      75      T       T/C
-scaffold_1      164     A       A/G
-scaffold_1      302     C       C/G
-scaffold_1      330     T       T/G
+#CHROM  POS     REF     CLM     LAP     WMM
+scaffold_4      830     A       A/A     ./.     A/C
+scaffold_4      1234    T       T/T     ./.     T/G
+scaffold_4      1531    T       T/T     ./.     T/C
+scaffold_4      1861    G       G/G     ./.     G/T
+scaffold_4      1862    TGGAAGG TGGAAGG/TGGAAGG ./.     TGGAAGG/T
 '''
-def read_tab(infile):
+def read_tab(infile, strain):
     data = defaultdict(lambda : defaultdict(lambda : list()))
+    columen = 3
     with open (infile, 'r') as filehd:
         for line in filehd:
             line = line.rstrip()
             if len(line) > 2 and line.startswith(r'scaffold'): 
                 unit = re.split(r'\t',line)
-                if len(unit[2]) == 1 and len(unit[3]) == 3:
+                if len(unit[2]) == 1 and len(unit[columen]) == 3:
                     #print '%s\t%s\t%s\t%s\t%s' %(unit[0], unit[1], unit[3], unit[3][0], unit[3][-1])
-                    data[unit[0]][unit[1]] = [unit[3][0], unit[3][-1]]
+                    data[unit[0]][unit[1]] = [unit[columen][0], unit[columen][-1]]
+            elif line.startswith('#CHROM'):
+                unit = re.split(r'\t',line)
+                for i in range(len(unit)):
+                    if unit[i] == strain:
+                        columen = i
     return data
 
 
@@ -65,7 +71,9 @@ def ancester_SNP(infile):
 def window_analysis(aSNP, SNP):
     win  = 2000
     step = 1000
+    #create scaffold_1 to scaffold 9 to loop
     for i in range(1, 10):
+    #for i in [4]:
         scaf = 'scaffold_%s' %(i)
         #print scaf
         aSNP_scaf = aSNP[scaf]
@@ -84,7 +92,7 @@ def window_analysis(aSNP, SNP):
             for rank in range(len(aSNP_scaf_win)):
                 #analyze only these SNP overlapped with diagnostic SNP
                 if SNP[scaf].has_key(aSNP_scaf_win[rank][1]):
-                    print '%s\t%s\tC_maxima:%s\tC_reticulata:%s\t%s\t%s' %(scaf, aSNP_scaf_win[rank][1], aSNP_scaf_win[rank][2], aSNP_scaf_win[rank][3], SNP[scaf][aSNP_scaf_win[rank][1]][0], SNP[scaf][aSNP_scaf_win[rank][1]][1])
+                    #print '%s\t%s\tC_maxima:%s\tC_reticulata:%s\t%s\t%s' %(scaf, aSNP_scaf_win[rank][1], aSNP_scaf_win[rank][2], aSNP_scaf_win[rank][3], SNP[scaf][aSNP_scaf_win[rank][1]][0], SNP[scaf][aSNP_scaf_win[rank][1]][1])
                     #homozygous
                     if SNP[scaf][aSNP_scaf_win[rank][1]][0] == SNP[scaf][aSNP_scaf_win[rank][1]][1]:
                         #C_maxima
@@ -101,7 +109,7 @@ def window_analysis(aSNP, SNP):
                         #C_maxima/C_reticulata
                         elif SNP[scaf][aSNP_scaf_win[rank][1]][0] == aSNP_scaf_win[rank][3] and SNP[scaf][aSNP_scaf_win[rank][1]][1] == aSNP_scaf_win[rank][2]:
                             ancester[2] += 1
-            print '%s\t%s\t%s' %(ancester[0], ancester[1], ancester[2])
+            #print '%s\t%s\t%s' %(ancester[0], ancester[1], ancester[2])
             ancester_state = 'unknown'
             ancester_snp   = 0
             #C_maxima
@@ -121,6 +129,7 @@ def window_analysis(aSNP, SNP):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input')
+    parser.add_argument('-s', '--strain')
     parser.add_argument('-o', '--output')
     parser.add_argument('-v', dest='verbose', action='store_true')
     args = parser.parse_args()
@@ -131,7 +140,7 @@ def main():
         sys.exit(2)
 
     aSNP = ancester_SNP('../input/nbt.2906-S2.txt')
-    SNP  = read_tab(args.input) 
+    SNP  = read_tab(args.input, args.strain) 
     #aSNP = '' 
     window_analysis(aSNP, SNP)
 

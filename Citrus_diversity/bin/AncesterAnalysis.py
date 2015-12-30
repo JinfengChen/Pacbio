@@ -68,9 +68,10 @@ def ancester_SNP(infile):
                 data[unit[0]].append(unit)
     return data
 
-def window_analysis(aSNP, SNP):
+def window_analysis(aSNP, SNP, prefix):
     win  = 2000
-    step = 1000
+    step = 2000
+    ofile = open('%s.ancester.bed' %(prefix), 'w')
     #create scaffold_1 to scaffold 9 to loop
     for i in range(1, 10):
     #for i in [4]:
@@ -115,16 +116,93 @@ def window_analysis(aSNP, SNP):
             #C_maxima
             if ancester[0] >= ancester[1] and ancester[0] >= len(aSNP_scaf_win)/2:
                 ancester_state = 'C_maxima'
-                ancester_snp   = ancester[0]
+                ancester_snp   = '%s/%s/%s' %(ancester[0], ancester[1], ancester[2])
+                #ancester_snp   = ancester[0]
             #C_reticulata
             elif ancester[1] >= ancester[0] and ancester[1] >= len(aSNP_scaf_win)/2:
                 ancester_state = 'C_reticulata'
-                ancester_snp   = ancester[1]
+                ancester_snp   = '%s/%s/%s' %(ancester[0], ancester[1], ancester[2])
+                #ancester_snp   = ancester[1]
             #C_maxima/C_reticulata
             elif ancester[2] >= ancester[0] and ancester[2] >= ancester[1] and ancester[2] >= len(aSNP_scaf_win)/2:
                 ancester_state = 'C_maxima/C_reticulata'
-                ancester_snp   = ancester[2]
-            print '%s\t%s\t%s\t%s\t%s\t%s' %(scaf, aSNP_scaf_win[0][1], aSNP_scaf_win[-1][1], ancester_state, ancester_snp, '+')
+                ancester_snp   = '%s/%s/%s' %(ancester[0], ancester[1], ancester[2])
+                #ancester_snp   = ancester[2]
+            else:
+                ancester_state = 'unknown'
+                ancester_snp   = '%s/%s/%s' %(ancester[0], ancester[1], ancester[2])
+            print >> ofile, '%s\t%s\t%s\t%s\t%s\t%s' %(scaf, aSNP_scaf_win[0][1], aSNP_scaf_win[-1][1], ancester_state, ancester_snp, '+')
+    ofile.close()
+
+def merge_overlap_win(prefix):
+    raw_bed  = '%s.ancester.bed' %(prefix)
+    uniq_bed = '%s.ancester.uniq.bed' %(prefix)
+    unique   = []
+    with open (raw_bed, 'r') as filehd:
+        for line in filehd:
+            line = line.rstrip()
+            unit = re.split(r'\t', line)
+            if len(unique) == 0:
+                unique.append(unit)
+            else:
+                # current window overlap with last window and with same genotype
+                #print '%s\t%s\t%s\t%s' %(unit[0], unique[-1][0], unit[1], unique[-1][2])
+                if unit[0] == unique[-1][0] and int(unit[1]) <= int(unique[-1][2]) and unit[3] == unique[-1][3]:
+                    unique[-1][2] = int(unit[2])
+                else:
+                    unique.append(unit)
+    ofile = open (uniq_bed, 'w')
+    for win in unique:
+        if win[3] == 'C_reticulata':
+            win[4] = 'orange'
+        elif win[3] == 'C_maxima':
+            win[4] = 'green'
+        elif win[3] == 'C_maxima/C_reticulata':
+            win[4] = 'blue'
+        else:
+            win[4] = 'gray'
+        print >> ofile, '\t'.join(map(str, win)) 
+    ofile.close() 
+
+'''
+scaffold_1      9791    28591350        C_reticulata    1906    +
+scaffold_1      28398652        28882450        C_maxima/C_reticulata   1373    +
+scaffold_1      28750435        28933880        unknown 0       +
+'''
+def convert_gff(infile, pos):
+    data = defaultdict(lambda : int())
+    ofile = open(re.sub(r'.bed', r'.1chr.bed', infile), 'w')
+    with open (infile, 'r') as filehd:
+        for line in filehd:
+            line = line.rstrip()
+            if len(line) > 2 and line.startswith(r'scaffold'):
+                unit = re.split(r'\t', line)
+                unit[1] = str(pos[unit[0]] + int(unit[1]))
+                unit[2] = str(pos[unit[0]] + int(unit[2]))
+                unit[0] = 'scaffold_1'
+                print >> ofile, '\t'.join(unit)
+            else:
+                print >> ofile, line
+    ofile.close()
+
+#Chr01	43270923	16701176	17133774
+#Chr10	23207287	8100966	8178267
+def read_chr(infile):
+    data = defaultdict(lambda : int())
+    with open (infile, 'r') as filehd:
+        for line in filehd:
+            line = line.rstrip()
+            if len(line) > 2 and line.startswith(r'scaffold'): 
+                unit = re.split(r'\t',line)
+                chrs = int(re.sub(r'scaffold_', r'',unit[0]))
+                data[chrs] = int(unit[1])
+    last = 0
+    pos  = defaultdict(lambda : int())
+    for c in sorted(data.keys(), key=int):
+        pos['scaffold_%s' %(c)] = last
+        last  += data[c]
+        #print 'Chr%s\t%s' %(c, pos[c])
+    return pos
 
 def main():
     parser = argparse.ArgumentParser()
@@ -138,12 +216,20 @@ def main():
     except:
         usage()
         sys.exit(2)
+  
+    if not args.output:
+        args.output = args.strain
+        if args.output == 'Citrus':
+            args.output = 'FAIRCHILD'
 
-    aSNP = ancester_SNP('../input/nbt.2906-S2.txt')
-    SNP  = read_tab(args.input, args.strain) 
-    #aSNP = '' 
-    window_analysis(aSNP, SNP)
-
+    if not os.path.exists('%s.ancester.bed' %(args.output)):
+        aSNP = ancester_SNP('../input/nbt.2906-S2.txt')
+        SNP  = read_tab(args.input, args.strain) 
+        window_analysis(aSNP, SNP, args.output)
+    merge_overlap_win(args.output)
+    pos = read_chr('Cclementina_v1.0_scaffolds.chrlen')
+    convert_gff('%s.ancester.uniq.bed' %(args.output), pos)
+ 
 if __name__ == '__main__':
     main()
 

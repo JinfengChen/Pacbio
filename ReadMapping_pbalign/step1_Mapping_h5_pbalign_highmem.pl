@@ -81,7 +81,7 @@ if (exists $opt{input}){
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
       if ($opt{step}=~/1/){
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --maxjob 40 --lines 1 --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=20g --convert no $opt{project}.map.sh`;
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --queue highmem --maxjob 1 --lines 10 --interval 120 --resource nodes=1:ppn=24,walltime=100:00:00,mem=200g --convert no $opt{project}.map.sh`;
       }
 
       ### merge and clean tmp files
@@ -106,7 +106,7 @@ if (exists $opt{input}){
       my $cmd2=join("\n",@merge);
       writefile("$opt{project}.merge.sh","$cmd2\n");
       if ($opt{step}=~/2/){
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --queue highmem --lines 5000 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=30G --convert no $opt{project}.merge.sh`;
       }
 
       my $ref_len = getfastalen($opt{ref});
@@ -137,7 +137,7 @@ if (exists $opt{input}){
       if ($opt{step}=~/3/){
           #lines=60 need be dividable by 4 and 6 as we need 6 line for load and 4 line without load
           #for 3000 contig lines=60 will have 10 contig in each job and 300 jobs in total 
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --maxjob 100 --lines 60 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.sort_split.sh`;
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs-env.pl --queue highmem  --maxjob 4 --lines 60 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=20G --convert no $opt{project}.sort_split.sh`;
       }
 
       ### clear tmp files
@@ -150,7 +150,7 @@ if (exists $opt{input}){
       my $cmd4=join("\n",@clear);
       writefile("$opt{project}.clear.sh","$cmd4\n");
       unless ($opt{verbose}){
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 10 --interval 120 --convert no $opt{project}.clear.sh`;
+          `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 10 --interval 120 --convert no $opt{project}.clear.sh`;
       }
    }
 }

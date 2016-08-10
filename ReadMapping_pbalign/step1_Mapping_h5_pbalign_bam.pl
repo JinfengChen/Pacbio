@@ -45,8 +45,8 @@ my $blasr="/opt/blasr/453c25ab/bin//blasr";
 my $soap="/usr/local/bin";
 my $ssaha="/home/jfchen/software/ssaha2_v2.5.5_x86_64/";
 my $maq="/opt/tyler/bin/maq";
-#my $pbalign="/opt/linux/centos/7.x/x86_64/pkgs/python/2.7.5/bin/pbalign";
 my $pbalign="~/BigData/00.RD/Assembly/Pacbio/install/pythonlib/bin/pbalign";
+my $bax2bam="/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/pitchfork/workspace/blasr/utils/bax2bam/bin/bax2bam";
 my $python_bin="/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/pythonlib/bin";
 my $fqsplit="/rhome/cjinfeng/software/bin/fastq_split.pl";
 my $fasplit="$Bin/fastaDeal.pl";
@@ -74,15 +74,18 @@ if (exists $opt{input}){
            my $temp=basename($fqs[$i]);
            my $prefix=$1 if ($temp=~/^(.*)\.fofn/);
            my $temp_sam="$opt{output}/$prefix.tempdir";
-           push @map, "$pbalign -vv --forQuiver --algorithm blasr --tmpDir $temp_sam --nproc 12 $fqs[$i] $opt{ref} $opt{output}/$prefix.cmp.h5";
-           push @cmph5, "$opt{output}/$prefix.cmp.h5";
+           #new pipeline need pbalign to have bam in and bam out: https://github.com/PacificBiosciences/pbalign/wiki/Mapping-RS-II-reads-(in-movie.bax.h5)-and-calling-consensus-using-pbalign-BLASR-while--sam-option-is-deprecated
+           my @bax_files = read_baxh5($fqs[$i]);
+           push @map, "$bax2bam $bax_files[0] $bax_files[1] $bax_files[2] -o $opt{output}/$prefix --subread";
+           push @map, "$pbalign --algorithm blasr --tmpDir $temp_sam --nproc 16 $opt{output}/$prefix.subreads.bam $opt{ref} $opt{output}/$prefix.bam";
+           push @cmph5, "$opt{output}/$prefix.bam";
            push @samdirs, $temp_sam;
            #push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
       }
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
       if ($opt{step}=~/1/){
-          `perl qsub-pbs-env_bam.pl --maxjob 40 --lines 1 --interval 120 --resource nodes=1:ppn=12,walltime=40:00:00,mem=60g --convert no $opt{project}.map.sh`;
+          `perl qsub-pbs-env_bam.pl --maxjob 40 --lines 2 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.map.sh`;
       }
 
       ### merge and clean tmp files
@@ -243,5 +246,22 @@ while (<IN>){
 close IN;
 $/="\n";
 return \%hash;
+}
+
+
+
+
+sub read_baxh5
+{
+my ($file)=@_;
+my @file;
+open IN,"$file" or die "$!";
+while (<IN>){
+    next if (length $_ < 2);
+    chomp $_;
+    push @file, $_
+}
+close IN;
+return @file;
 }
 

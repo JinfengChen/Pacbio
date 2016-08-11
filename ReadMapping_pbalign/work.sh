@@ -17,3 +17,5 @@ echo "Citrus_asm40"
 
 echo "Citrus_PBcR"
 perl step1_Mapping_h5_pbalign_bam.pl --ref /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/citrus_PBcR_v1_line50.fa --input /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/input.Citrus_A02_1.fofn --project Citrus_PBcR_round1 --step 12 --verbose  > log 2>&1 
+#
+perl step1_Mapping_h5_pbalign_bam.pl --ref /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/citrus_PBcR_v1_line50.fa --input /rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/ReadMapping_pbalign/input.Citrus_highqual.fofn --project Citrus_PBcR_round1 --step 12 --verbose  > log 2>&1

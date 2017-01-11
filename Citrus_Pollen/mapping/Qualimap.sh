@@ -1,0 +1,8 @@
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen41_GT.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen43_GT.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen44.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen44.discordants.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen44.splitters.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen45.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen45.discordants.bam --java-mem-size=16G -nt 1 -outformat PDF
+/rhome/cjinfeng/BigData/software/qualimap/qualimap_v2.1.2/qualimap bamqc -bam /bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/Citrus_Pollen/mapping/Pollen45.splitters.bam --java-mem-size=16G -nt 1 -outformat PDF

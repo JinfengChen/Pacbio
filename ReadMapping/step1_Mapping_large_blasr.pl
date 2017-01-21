@@ -38,19 +38,20 @@ $opt{output} = File::Spec->rel2abs("$opt{project}");
 `mkdir $opt{output}` unless (-d $opt{output});
 
 
-my $bwa="/opt/tyler/bin/";
-my $blasr="/opt/blasr/453c25ab/bin//blasr";
+my $bwa="/opt/linux/centos/7.x/x86_64/pkgs/bwa/0.7.12/bin/bwa";
+my $blasr="/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/wgs-8.3rc2/Linux-amd64/bin/blasr";
 my $blasr2="/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/blasr/alignment/bin/blasr";
 my $soap="/usr/local/bin";
 my $ssaha="/home/jfchen/software/ssaha2_v2.5.5_x86_64/";
 my $maq="/opt/tyler/bin/maq";
 my $fqsplit="/rhome/cjinfeng/software/bin/fastq_split.pl";
 my $fasplit="$Bin/fastaDeal.pl";
-my $SAMtool="/usr/local/bin/samtools";
+my $SAMtool="/rhome/cjinfeng/BigData/software/samtools-0.1.19/samtools";
 my $rmdup="/opt/picard/1.81/MarkDuplicates.jar";
+my $fa2fq="python /rhome/cjinfeng/BigData/software/bin/fasta2fastq.py";
 
 if (exists $opt{1}){
-   if ($opt{tool}=~/blasr/){
+   if ($opt{tool}=~/bwa/){
       print "Run long read mapping by blasr!\n";
       #unless (-e "$opt{ref}.sa"){
       #   `$bwa/bwa index $opt{ref} > $opt{project}.index.log 2> $opt{project}.index.log2`;
@@ -64,7 +65,7 @@ if (exists $opt{1}){
       }
       my $cmd=join("\n",@split);
       writefile("$opt{project}.split.sh","$cmd\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 1 --interval 120 --resource walltime=100:00:00,mem=5G --convert no $opt{project}.split.sh`;
+      `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 1 --interval 120 --resource walltime=100:00:00,mem=5G --convert no $opt{project}.split.sh`;
 
       ### map small files
       my @map;
@@ -74,18 +75,25 @@ if (exists $opt{1}){
            #my $prefix=substr(basename($fqs[$i]),0,3);
            my $temp=basename($fqs[$i]);
            my $prefix=$1 if ($temp=~/^(p\d+)\./);
-           if (!$opt{genomealign}){
-               push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
-           }else{
-               push @map, "$blasr2 $fqs[$i] $opt{ref} -rbao -sam -clipping soft -minMatch 40 -advanceExactMatches 40 -noRefineAlignments -affineAlign -affineOpen 100 -affineExtend 0 > $opt{output}/$prefix.sam";
-           }
+           my $fq  = "$opt{output}/$prefix.fq";
+           push @map, "$fa2fq $fqs[$i] $fq";
+           push @map, "$bwa mem $opt{ref} $fq > $opt{output}/$prefix.sam"
+           #if (!$opt{genomealign}){
+           #    push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
+           #}else{
+           #    push @map, "$blasr2 $fqs[$i] $opt{ref} -rbao -sam -clipping soft -minMatch 40 -advanceExactMatches 40 -noRefineAlignments -affineAlign -affineOpen 100 -affineExtend 0 > $opt{output}/$prefix.sam";
+           #}
            #push @map, "$bwa/bwa aln -n 3 -l 32 -R 1000 -t 1 $opt{ref} $fqs[$i] > $fqs[$i].sai 2> $fqs[$i].bwa.log2";
            #push @map, "$bwa/bwa aln -n 3 -l 32 -R 1000 -t 1 $opt{ref} $fqs[$i+1] > $fqs[$i+1].sai 2> $fqs[$i+1].bwa.log2";
            #push @map, "$bwa/bwa sampe -a $opt{max} $opt{ref} $fqs[$i].sai $fqs[$i+1].sai $fqs[$i] $fqs[$i+1] > $opt{output}/$prefix.sam 2> $opt{output}/$prefix.sampe.log2";
       }
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --maxjob 60 --lines 1 --interval 120 --resource walltime=100:00:00,mem=6g --convert no $opt{project}.map.sh`;
+      if ($opt{split} > 1000){
+          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --maxjob 60 --lines 1 --interval 120 --resource walltime=100:00:00,mem=40g --convert no $opt{project}.map.sh`;
+      }else{
+          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --maxjob 60 --lines 2 --interval 120 --resource walltime=100:00:00,mem=40g --convert no $opt{project}.map.sh`;
+      }
 
       ### merge and clean tmp files
       my @merge;
@@ -103,7 +111,7 @@ if (exists $opt{1}){
       push (@merge, "$SAMtool index $opt{output}.bam");
       my $cmd2=join("\n",@merge);
       writefile("$opt{project}.merge.sh","$cmd2\n");
-      `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 5 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 5 --interval 120  --resource walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
 
       ### clear tmp files
       my @clear;
@@ -113,7 +121,7 @@ if (exists $opt{1}){
       my $cmd3=join("\n",@clear);
       writefile("$opt{project}.clear.sh","$cmd3\n");
       unless ($opt{verbose}){
-          `perl /rhome/cjinfeng/software/bin/qsub-pbs.pl --lines 3 --interval 120 --convert no $opt{project}.clear.sh`;
+          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 3 --interval 120 --convert no $opt{project}.clear.sh`;
       }
 =cut
       print "Align Read 1!\n";

@@ -28,7 +28,7 @@ python splitSNP/splitSNP_pipe.py --input scaffold_1.snp.list --bam citrus_canu1_
 def runjob(script, lines):
     #cmd = 'perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 30 --lines %s --interval 120 --resource nodes=1:ntasks=12,time=100:00:00,mem=20G --convert no %s' %(lines, script)
     #print cmd
-    cmd = 'perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 30 --lines %s --interval 120 --node 1 --mem 20G --time 100:00:00 --convert no %s' %(lines, script)
+    cmd = 'perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 90 --lines %s --interval 120 --task 1 --mem 20G --time 40:00:00 --convert no %s' %(lines, script)
     os.system(cmd)
 
 def fasta_id(fastafile):
@@ -49,8 +49,8 @@ def readtable(infile):
                     data[unit[0]] = unit[1]
     return data
 
-def splitSNPsite(snpfile, prefix):
-    os.system('grep "^SNP" -v %s |  split -l 10000 - %s.snp.subfile' %(snpfile, prefix)) 
+def splitSNPsite(snpfile, prefix, size):
+    os.system('grep "^SNP" -v %s |  split -l %s - %s.snp.subfile' %(snpfile, size, prefix)) 
     snpfiles=glob.glob('%s.snp.subfile*' %(prefix))
     return snpfiles
 
@@ -122,6 +122,7 @@ def splitBAM_by_SNP(bam, snpfiles, prefix):
     alt_filename = '%s.alt.reads.bam' %(prefix)
     amb_filename = '%s.amb.reads.bam' %(prefix)
     hom_filename = '%s.hom.reads.bam' %(prefix)
+    read_hom_file = open('%s.hom.reads.list' %(prefix), 'w')
     bam_files = [ref_filename, alt_filename, amb_filename, hom_filename]
     ref_bam = pysam.AlignmentFile(ref_filename, "wb", template=samfile)
     alt_bam = pysam.AlignmentFile(alt_filename, "wb", template=samfile)
@@ -139,6 +140,7 @@ def splitBAM_by_SNP(bam, snpfiles, prefix):
             summary[2] += 1
         else:
             hom_bam.write(read)
+            print >> read_hom_file, read.query_name
             summary[3] += 1
         summary[4] += 1
     samfile.close()
@@ -146,6 +148,7 @@ def splitBAM_by_SNP(bam, snpfiles, prefix):
     alt_bam.close()
     amb_bam.close()
     hom_bam.close()
+    read_hom_file.close()
     pysam.index(ref_filename)
     pysam.index(alt_filename)
     pysam.index(amb_filename)
@@ -158,7 +161,8 @@ def splitBAM_by_SNP(bam, snpfiles, prefix):
     print >> split_sum, 'Homozygous reads: %s' %(summary[3])
     print >> split_sum, 'Total reads: %s' %(summary[4])
     split_sum.close()
-  
+    return bam_files 
+ 
 def convert_sequence(bam_files, prefix): 
     ##bam to fastq and fasta
     bedtools = '/opt/linux/centos/7.x/x86_64/pkgs/bedtools/2.25.0/bin/bedtools'
@@ -179,6 +183,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input')
     parser.add_argument('-b', '--bam')
+    parser.add_argument('-s', '--size', default=10000, help='Number of SNP in each subfile')
     parser.add_argument('-o', '--output')
     parser.add_argument('-v', dest='verbose', action='store_true')
     args = parser.parse_args()
@@ -191,6 +196,10 @@ def main():
     if not args.output:
         args.output = 'Pacbio_haplotype_reads'  
  
+    #number of SNP in each sub file
+    if not args.size:
+        args.size = 10000
+
     prefix = args.output
     outdir = os.path.abspath(args.output)
     if not os.path.exists(outdir):
@@ -198,7 +207,7 @@ def main():
     
     #cut SNP file 
     bam = os.path.abspath(args.bam) 
-    snpfiles = splitSNPsite(args.input, '%s/%s' %(outdir, prefix))
+    snpfiles = splitSNPsite(args.input, '%s/%s' %(outdir, prefix), args.size)
     #splitBAM
     bam_files = []
     if os.path.exists('%s.summary' %(args.output)):

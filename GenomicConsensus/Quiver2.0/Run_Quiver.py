@@ -24,7 +24,8 @@ python Run_Quiver.py --cmddir test_cmd_sort_split --ref yeast_ass_line50_clean.f
 
 
 def runjob(script, lines):
-    cmd = 'perl qsub-pbs-env_bam.pl --maxjob 40 --lines %s --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=20G --convert no %s' %(lines, script)
+    #cmd = 'perl qsub-pbs-env_bam.pl --maxjob 40 --lines %s --interval 120 --resource nodes=1:ppn=4,walltime=100:00:00,mem=20G --convert no %s' %(lines, script)
+    cmd = 'perl qsub-slurm-env_bam.pl --maxjob 50 --lines %s --interval 120 --task 4 --mem 40G --time 100:00:00 --convert no %s' %(lines, script)
     #print cmd 
     os.system(cmd)
 
@@ -73,6 +74,9 @@ def main():
         prefix = re.sub(r'\.bam', r'', prefix)
         contig = '%s/%s.fa' %(args.ref, prefix)
         prefix = '%s/%s' %(args.project, prefix)
+        bam = re.sub(r'\|', r'\\|', bam)
+        contig = re.sub(r'\|', r'\\|', contig)
+        prefix = re.sub(r'\|', r'\\|', prefix)
         #-p C2.NoQVsModel
         #cmd = 'quiver --minMapQV 0 -j4 %s -r %s -o %s.gff -o %s.consensus.fasta -o %s.consensus.fastq' %(os.path.abspath(h5), os.path.abspath(args.ref), os.path.abspath(prefix), os.path.abspath(prefix), os.path.abspath(prefix))
         cmd = 'quiver --minMapQV 20 -j4 %s -r %s -o %s.gff -o %s.consensus.fasta -o %s.consensus.fastq' %(os.path.abspath(bam), os.path.abspath(contig), os.path.abspath(prefix), os.path.abspath(prefix), os.path.abspath(prefix))

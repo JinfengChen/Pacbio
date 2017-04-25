@@ -90,17 +90,25 @@ if (exists $opt{input}){
       my $cmd1=join("\n",@map);
       writefile("$opt{project}.map.sh","$cmd1\n");
       if ($opt{step}=~/1/){
-          `perl qsub-pbs-env_bam.pl --maxjob 40 --lines 2 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.map.sh`;
+          print "step1: mapping read files\n";
+          #`perl qsub-pbs-env_bam.pl --maxjob 40 --lines 2 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.map.sh`;
+          `perl qsub-slurm-env_bam.pl --maxjob 40 --lines 2 --interval 120 --task 16 --mem 40G --time 20:00:00 --convert no $opt{project}.map.sh`
       }
       
       my $temp=basename($opt{ref});
       my $prefix=$1 if ($temp=~/^(.*)\.fa/);
       merge_bam($opt{project}, $prefix);
       if ($opt{step}=~/2/){
-          `qsub $opt{project}.merge_bam.sh`
+          print "step2: merging bam files\n";
+          #`qsub $opt{project}.merge_bam.sh`
           #`perl qsub-pbs-env_bam.pl --maxjob 1 --lines 100 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.merge_bam.sh`;
       }
-
+      split_bam($opt{project}, $prefix);
+      if ($opt{step}=~/3/){
+          print "step3: spliting bam files\n";
+          #`perl qsub-pbs-env_bam.pl --maxjob 40 --lines 100 --interval 120 --resource nodes=1:ppn=5,walltime=40:00:00,mem=20g --convert no $opt{project}.split_bam.sh`;
+          `perl qsub-slurm-env_bam.pl --maxjob 50 --lines 100 --interval 120 --task 4 --mem 20G --time 20:00:00 --convert no $opt{project}.split_bam.sh`;
+      }
       ### merge and clean tmp files
       #my @merge;
       #my $cmph5_files = join(" ", @cmph5);
@@ -167,7 +175,8 @@ if (exists $opt{input}){
       my $cmd4=join("\n",@clear);
       writefile("$opt{project}.clear.sh","$cmd4\n");
       unless ($opt{verbose}){
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 10 --interval 120 --convert no $opt{project}.clear.sh`;
+          #`perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs.pl --lines 10 --interval 120 --convert no $opt{project}.clear.sh`;
+          `perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 1 --lines 10 --interval 120 --task 1 --mem 40G --time 10:00:00 --convert no $opt{project}.clear.sh`
       }
    }
 }
@@ -178,12 +187,13 @@ my ($prefix, $prefix_ref) = @_;
 
 my $shell=<<CMD;
 #!/bin/bash
-#PBS -l nodes=1:ppn=16
-#PBS -l mem=40gb
-#PBS -l walltime=100:00:00
-#PBS -j oe
-#PBS -V
-#PBS -d ./
+#SBATCH --nodes=1
+##SBATCH --ntasks=16
+##SBATCH --mem=40G
+##SBATCH --time=40:00:00
+##SBATCH --output=stdout
+##SBATCH -p intel
+##SBATCH --workdir=./
 
 start=`date +%s`
 
@@ -203,14 +213,14 @@ if [ ! -d $prefix_ref\_split_contig ]; then
 fi
 
 
-for c in `cat $prefix.merged.contigs.txt` ; do
-    echo processing \$c
-    samtools view -@ \$PBS_NP -bh $prefix.merged.bam \$c > $prefix.merged.bam_split_contig/\$c.bam
-    pbindex $prefix.merged.bam_split_contig/\$c.bam
-    samtools index $prefix.merged.bam_split_contig/\$c.bam
-    perl ~/BigData/software/bin/fastaDeal.pl --get_id \$c $prefix_ref\.fa > $prefix_ref\_split_contig/\$c\.fa
-    samtools faidx $prefix_ref\_split_contig/\$c\.fa 
-done
+#for c in `cat $prefix.merged.contigs.txt` ; do
+#    echo processing \$c
+#    samtools view -@ \$SLURM_NTASKS -bh $prefix.merged.bam \$c > $prefix.merged.bam_split_contig/\$c.bam
+#    pbindex $prefix.merged.bam_split_contig/\$c.bam
+#    samtools index $prefix.merged.bam_split_contig/\$c.bam
+#    perl ~/BigData/software/bin/fastaDeal.pl --get_id \$c $prefix_ref\.fa > $prefix_ref\_split_contig/\$c\.fa
+#    samtools faidx $prefix_ref\_split_contig/\$c\.fa 
+#done
 
 end=`date +%s`
 runtime=\$((end-start))
@@ -225,6 +235,32 @@ CMD
 
 open OUT, ">$prefix.merge_bam.sh" or die "$!";
     print OUT "$shell";
+close OUT;
+}
+
+sub split_bam
+{
+my ($prefix, $prefix_ref) = @_;
+$prefix = File::Spec->rel2abs($prefix);
+$prefix_ref = File::Spec->rel2abs($prefix_ref);
+my $contig_file = "$prefix.merged.contigs.txt";
+my %hash;
+open OUT, ">$prefix\.split_bam.sh" or die "$!";
+open IN, "$contig_file" or die "$!";
+while(<IN>){
+    chomp $_;
+    next if ($_=~/^$/);
+    my @unit=split("\t",$_);
+    $hash{$unit[0]} = 1;
+}
+close IN;
+foreach my $c (keys %hash){ 
+    print OUT "samtools view -@ 4 -bh $prefix.merged.bam $c > $prefix.merged.bam_split_contig/$c.bam\n";
+    print OUT "pbindex $prefix.merged.bam_split_contig/$c.bam\n";
+    print OUT "samtools index $prefix.merged.bam_split_contig/$c.bam\n";
+    print OUT "perl ~/BigData/software/bin/fastaDeal.pl --get_id $c $prefix_ref\.fa > $prefix_ref\_split_contig/$c\.fa\n";
+    print OUT "samtools faidx $prefix_ref\_split_contig/$c\.fa\n";
+}
 close OUT;
 }
 

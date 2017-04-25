@@ -38,7 +38,7 @@ unless ($opt{project}){
 $opt{output} = File::Spec->rel2abs("$opt{project}");
 my $tempdir = File::Spec->rel2abs("./tempdir");
 `mkdir $opt{output}` unless (-d $opt{output});
-`mkdir "$opt{output}\_cmp_split"` unless (-d "$opt{output}\_cmp_split");
+#`mkdir "$opt{output}\_cmp_split"` unless (-d "$opt{output}\_cmp_split");
 
 my $bwa="/opt/tyler/bin/";
 my $blasr="/opt/blasr/453c25ab/bin//blasr";
@@ -76,8 +76,13 @@ if (exists $opt{input}){
            my $temp_sam="$opt{output}/$prefix.tempdir";
            #new pipeline need pbalign to have bam in and bam out: https://github.com/PacificBiosciences/pbalign/wiki/Mapping-RS-II-reads-(in-movie.bax.h5)-and-calling-consensus-using-pbalign-BLASR-while--sam-option-is-deprecated
            my @bax_files = read_baxh5($fqs[$i]);
-           push @map, "$bax2bam $bax_files[0] $bax_files[1] $bax_files[2] -o $opt{output}/$prefix --subread";
-           push @map, "$pbalign --algorithm blasr --tmpDir $temp_sam --nproc 16 $opt{output}/$prefix.subreads.bam $opt{ref} $opt{output}/$prefix.bam";
+           #print "subreads: $opt{output}/$prefix.subreads.bam\n";
+           my $temp = $prefix;
+           $temp =~ s/round2/round1/;
+           my $subread = "$opt{output}/$temp.subreads.bam";
+           print "subreads: $subread\n";
+           push @map, "$bax2bam $bax_files[0] $bax_files[1] $bax_files[2] -o $opt{output}/$prefix --subread" unless (-e "$subread");
+           push @map, "$pbalign --algorithm blasr --tmpDir $temp_sam --nproc 16 $subread $opt{ref} $opt{output}/$prefix.bam";
            push @cmph5, "$opt{output}/$prefix.bam";
            push @samdirs, $temp_sam;
            #push @map, "$blasr $fqs[$i] $opt{ref} -sam -bestn 2 -nproc 1 > $opt{output}/$prefix.sam";
@@ -87,45 +92,53 @@ if (exists $opt{input}){
       if ($opt{step}=~/1/){
           `perl qsub-pbs-env_bam.pl --maxjob 40 --lines 2 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.map.sh`;
       }
+      
+      my $temp=basename($opt{ref});
+      my $prefix=$1 if ($temp=~/^(.*)\.fa/);
+      merge_bam($opt{project}, $prefix);
+      if ($opt{step}=~/2/){
+          `qsub $opt{project}.merge_bam.sh`
+          #`perl qsub-pbs-env_bam.pl --maxjob 1 --lines 100 --interval 120 --resource nodes=1:ppn=16,walltime=40:00:00,mem=40g --convert no $opt{project}.merge_bam.sh`;
+      }
 
       ### merge and clean tmp files
-      my @merge;
-      my $cmph5_files = join(" ", @cmph5);
-      push @merge, "python $python_bin/cmph5tools.py merge --outFile $opt{output}.cmp.h5 $cmph5_files" unless (-e "$opt{output}.cmp.h5");
+      #my @merge;
+      #my $cmph5_files = join(" ", @cmph5);
+      #push @merge, "python $python_bin/cmph5tools.py merge --outFile $opt{output}.cmp.h5 $cmph5_files" unless (-e "$opt{output}.cmp.h5");
       #push @merge, "python $python_bin/cmph5tools.py sort --deep $opt{output}.cmp.h5 --outFile $opt{output}.cmp.dsort.h5 --tmpDir $tempdir" unless (-e "$opt{output}.cmp.dsort.h5");
       #push @merge, "python $python_bin/cmph5tools.py select --groupBy=Reference --outDir $opt{output}\_cmp_split $opt{output}.cmp.h5";
-      if ($opt{bam}){
-          my @samfiles = getsamfiles(\@samdirs);
-          unless (-e "$opt{output}.sam"){
-              push (@merge, "grep \"^@\" $samfiles[0] > $opt{output}.sam");
-              for (my $i=0; $i<@samfiles;$i++){
-                  push (@merge, "cat $samfiles[$i] | grep -v \"^@\" >> $opt{output}.sam");
-              }
-          }
-          push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
-          push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
-      }
+      #if ($opt{bam}){
+      #    my @samfiles = getsamfiles(\@samdirs);
+      #    unless (-e "$opt{output}.sam"){
+      #        push (@merge, "grep \"^@\" $samfiles[0] > $opt{output}.sam");
+      #        for (my $i=0; $i<@samfiles;$i++){
+      #            push (@merge, "cat $samfiles[$i] | grep -v \"^@\" >> $opt{output}.sam");
+      #        }
+      #    }
+      #    push (@merge, "$SAMtool view -bS -o $opt{output}.raw.bam $opt{output}.sam > $opt{output}.convert.log 2> $opt{output}.convert.log2") unless (-e "$opt{output}.raw.bam");
+      #    push (@merge, "$SAMtool sort -m 1000000000 $opt{output}.raw.bam $opt{output} > $opt{output}.sort.log 2> $opt{output}.sort.log2") unless (-e "$opt{output}.bam");
+      #}
       #push (@merge, "java -Xmx5G -jar $rmdup ASSUME_SORTED=TRUE REMOVE_DUPLICATES=TRUE VALIDATION_STRINGENCY=LENIENT INPUT=$opt{output}.sort.bam OUTPUT=$opt{output}.bam METRICS_FILE=$opt{output}.dupli > $opt{output}.rmdup.log 2> $opt{output}.rmdup.log2") unless (-e "$opt{output}.bam");
       #push (@merge, "$SAMtool index $opt{output}.bam");
-      my $cmd2=join("\n",@merge);
-      writefile("$opt{project}.merge.sh","$cmd2\n");
-      if ($opt{step}=~/2/){
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
-      }
+      #my $cmd2=join("\n",@merge);
+      #writefile("$opt{project}.merge.sh","$cmd2\n");
+      #if ($opt{step}=~/2/){
+      #    `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --lines 5000 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.merge.sh`;
+      #}
 
-      my $ref_len = getfastalen($opt{ref});
-      my @ref_id  = sort {$a <=> $b} keys %$ref_len;
-      ###split and sort cmp.h5 files
-      my @sort_split;
-      for (my $i=0; $i<@ref_id; $i++){
-          push @sort_split, "python $python_bin/cmph5tools.py select --where \"Reference == '$ref_id[$i]'\" --outFile $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 $opt{output}.cmp.h5";
-          push @sort_split, "python $python_bin/cmph5tools.py sort --deep --inPlace $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 --tmpDir $tempdir";
+      #my $ref_len = getfastalen($opt{ref});
+      #my @ref_id  = sort {$a <=> $b} keys %$ref_len;
+      ####split and sort cmp.h5 files
+      #my @sort_split;
+      #for (my $i=0; $i<@ref_id; $i++){
+      #    push @sort_split, "python $python_bin/cmph5tools.py select --where \"Reference == '$ref_id[$i]'\" --outFile $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 $opt{output}.cmp.h5";
+      #    push @sort_split, "python $python_bin/cmph5tools.py sort --deep --inPlace $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 --tmpDir $tempdir";
           #cmph5tools in path of qsub, no need to do load* here
           #push @sort_split, "$loadpulses $opt{input} $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 -metrics DeletionQV,DeletionTag,InsertionQV,MergeQV,SubstitutionQV";
           #push @sort_split, "$loadchemistry $opt{input} $opt{output}\_cmp_split/$ref_id[$i].cmp.h5";
-          push @sort_split, "/usr/bin/h5repack -f GZIP=1 $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 $opt{output}\_cmp_split/$ref_id[$i].cmp.h5.TMP";
-          push @sort_split, "mv $opt{output}\_cmp_split/$ref_id[$i].cmp.h5.TMP $opt{output}\_cmp_split/$ref_id[$i].cmp.h5";
-      }
+      #    push @sort_split, "/usr/bin/h5repack -f GZIP=1 $opt{output}\_cmp_split/$ref_id[$i].cmp.h5 $opt{output}\_cmp_split/$ref_id[$i].cmp.h5.TMP";
+      #    push @sort_split, "mv $opt{output}\_cmp_split/$ref_id[$i].cmp.h5.TMP $opt{output}\_cmp_split/$ref_id[$i].cmp.h5";
+      #}
 
       #my @cmph5_split_files = glob("$opt{output}\_cmp_split/*.cmp.h5");
       #my @sort_split;
@@ -136,13 +149,13 @@ if (exists $opt{input}){
       #    #push @sort_split, "$loadpulses $opt{input} $contig.sort.cmp.h5 -metrics DeletionQV,DeletionTag,InsertionQV,MergeQV,SubstitutionQV";
       #    #push @sort_split, "$loadchemistry $opt{input} $contig.sort.cmp.h5";
       #} 
-      my $cmd3=join("\n", @sort_split);
-      writefile("$opt{project}.sort_split.sh","$cmd3\n");
-      if ($opt{step}=~/3/){
+      #my $cmd3=join("\n", @sort_split);
+      #writefile("$opt{project}.sort_split.sh","$cmd3\n");
+      #if ($opt{step}=~/3/){
           #lines=60 need be dividable by 4 and 6 as we need 6 line for load and 4 line without load
           #for 3000 contig lines=60 will have 10 contig in each job and 300 jobs in total 
-          `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --maxjob 100 --lines 60 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.sort_split.sh`;
-      }
+      #    `perl /rhome/cjinfeng/BigData/software/bin/qsub-pbs-env.pl --maxjob 100 --lines 60 --interval 120  --resource nodes=1:ppn=1,walltime=100:00:00,mem=10G --convert no $opt{project}.sort_split.sh`;
+      #}
 
       ### clear tmp files
       my @clear;
@@ -159,7 +172,61 @@ if (exists $opt{input}){
    }
 }
 
+sub merge_bam
+{
+my ($prefix, $prefix_ref) = @_;
 
+my $shell=<<CMD;
+#!/bin/bash
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=40gb
+#PBS -l walltime=100:00:00
+#PBS -j oe
+#PBS -V
+#PBS -d ./
+
+start=`date +%s`
+
+export LD_LIBRARY_PATH=/bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/install/pitchfork/deployment/lib:\$LD_LIBRARY_PATH
+export PATH=/bigdata/stajichlab/cjinfeng/00.RD/Assembly/Pacbio/install/pitchfork/deployment/bin:\$PATH
+
+ls `pwd`/$prefix/$prefix.m150*_p0.bam > $prefix.bam.fofn
+pbmerge -o $prefix.merged.bam $prefix.bam.fofn
+samtools index $prefix.merged.bam
+samtools view -H $prefix.merged.bam | awk '{print \$2}' | grep "^SN" | awk '{gsub(/SN\:/,""); print}' > $prefix.merged.contigs.txt
+if [ ! -d $prefix.merged.bam_split_contig ]; then
+    mkdir $prefix.merged.bam_split_contig
+fi
+
+if [ ! -d $prefix_ref\_split_contig ]; then
+    mkdir $prefix_ref\_split_contig
+fi
+
+
+for c in `cat $prefix.merged.contigs.txt` ; do
+    echo processing \$c
+    samtools view -@ \$PBS_NP -bh $prefix.merged.bam \$c > $prefix.merged.bam_split_contig/\$c.bam
+    pbindex $prefix.merged.bam_split_contig/\$c.bam
+    samtools index $prefix.merged.bam_split_contig/\$c.bam
+    perl ~/BigData/software/bin/fastaDeal.pl --get_id \$c $prefix_ref\.fa > $prefix_ref\_split_contig/\$c\.fa
+    samtools faidx $prefix_ref\_split_contig/\$c\.fa 
+done
+
+end=`date +%s`
+runtime=\$((end-start))
+
+echo "Start: \$start"
+echo "End: \$end"
+echo "Run time: \$runtime"
+
+echo "Done"
+
+CMD
+
+open OUT, ">$prefix.merge_bam.sh" or die "$!";
+    print OUT "$shell";
+close OUT;
+}
 
 sub writefile
 {

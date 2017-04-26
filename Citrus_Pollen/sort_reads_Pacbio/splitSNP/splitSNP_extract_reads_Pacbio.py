@@ -80,6 +80,8 @@ def split_file_list(script, fasta_list, hom_ref_amb, alt, prefix):
     if not os.path.exists(dir_name_alt):
         os.mkdir(dir_name_alt)
     shell = '%s.fasta_list_split.sh' %(prefix)
+    ofile_hom_ref_amb_fofn = open('%s.input.fofn' %(dir_name_hom_ref_amb), 'w')
+    ofile_alt_fofn         = open('%s.input.fofn' %(dir_name_alt), 'w')
     ofile = open(shell, 'w')
     with open (fasta_list, 'r') as filehd:
         for line in filehd:
@@ -91,8 +93,12 @@ def split_file_list(script, fasta_list, hom_ref_amb, alt, prefix):
                 alt_fasta         = '%s/%s' %(os.path.abspath(dir_name_alt), file_name)
                 print >> ofile, 'perl %s/getidseq.pl -l %s -f %s -o %s' %(script, hom_ref_amb, fasta, hom_ref_amb_fasta)
                 print >> ofile, 'perl %s/getidseq.pl -l %s -f %s -o %s' %(script, alt, fasta, alt_fasta)
+                print >> ofile_hom_ref_amb_fofn, hom_ref_amb_fasta
+                print >> ofile_alt_fofn, alt_fasta
     ofile.close()
-    runjob(shell, 2)
+    ofile_hom_ref_amb_fofn.close()
+    ofile_alt_fofn.close()
+    #runjob(shell, 2)
 
 def readtable(infile):
     data = defaultdict(lambda : int())

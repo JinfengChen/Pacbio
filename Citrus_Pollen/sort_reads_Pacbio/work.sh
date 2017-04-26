@@ -11,3 +11,7 @@ echo "extract reads from single fatsa file"
 python splitSNP/splitSNP_extract_reads_Pacbio.py --input Pacbio_haplotype_reads --fasta citrus.pacbio.fasta
 echo "extract reads from list of fatsa files"
 python splitSNP/splitSNP_extract_reads_Pacbio.py --input Pacbio_haplotype_reads --fasta_list input.fofn
+
+echo "20kb long reads"
+python splitSNP/splitSNP_pipe.py --input scaffold_all.snp.list --bam citrus_20kb_bwa_mem.bam --size 5000 > log 2>&1 &
+

@@ -28,7 +28,8 @@ python splitSNP/splitSNP_pipe.py --input scaffold_1.snp.list --bam citrus_canu1_
 def runjob(script, lines):
     #cmd = 'perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 30 --lines %s --interval 120 --resource nodes=1:ntasks=12,time=100:00:00,mem=20G --convert no %s' %(lines, script)
     #print cmd
-    cmd = 'perl /rhome/cjinfeng/BigData/software/bin/qsub-slurm.pl --maxjob 90 --lines %s --interval 120 --task 1 --mem 20G --time 40:00:00 --convert no %s' %(lines, script)
+    homedir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    cmd = 'perl %s/qsub-slurm-env_bam.pl --maxjob 20 --lines %s --interval 120 --task 1 --mem 20G --time 40:00:00 --convert no %s' %(homedir, lines, script)
     os.system(cmd)
 
 def fasta_id(fastafile):

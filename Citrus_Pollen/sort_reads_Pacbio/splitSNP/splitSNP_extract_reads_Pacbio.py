@@ -117,6 +117,7 @@ def main():
     parser.add_argument('-i', '--input')
     parser.add_argument('--fasta', help='a fasta file to split')
     parser.add_argument('--fasta_list', help='a list of fasta file to split')
+    parser.add_argument('--fastaid', help='fasta id')
     parser.add_argument('-o', '--output')
     parser.add_argument('-v', dest='verbose', action='store_true')
     args = parser.parse_args()
@@ -134,10 +135,10 @@ def main():
     all_fasta_id = defaultdict(lambda : int())
     if args.fasta:
         #all_fasta_id = fasta_id(args.fasta)
-        all_fasta_id = readtable('citrus.pacbio.fasta.id') 
+        all_fasta_id = readtable(args.fastaid) 
     if args.fasta_list:
         #all_fasta_id = fasta_id_list(args.fasta_list)  
-        all_fasta_id = readtable('citrus.pacbio.fasta.id')    
+        all_fasta_id = readtable(args.fastaid)    
     #unique id list
     hom_ref_amb, alt = unique_reads_list(args.input, all_fasta_id)
     #clear memory

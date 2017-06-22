@@ -68,7 +68,7 @@ for (my $i=0;$i<@chr;$i++){
                 x=>$refgapx,y=>$refgapy,
                 width=>$refgapw,height=>$refgaph,
                 style=>{
-                     fill=>$gap_color, stroke=>'none'
+                     fill=>$gap_color, stroke=>$gap_color, 'stroke-width'=>0.1
                 }
         );
     }
@@ -96,13 +96,13 @@ for (my $i=0;$i<@chr;$i++){
     foreach my $gap (@{$qrygap->{$chr[$i]}}){ 
         my $qrygapx=$qryx + $gap->[0]/$scale;
         my $qrygapy=$qryy;
-        my $qrygapw=($gap->[1]-$gap->[0])/$scale;     
+        my $qrygapw=10*($gap->[1]-$gap->[0])/$scale;
         my $qrygaph=20;
         my $qrygapbox=$svg->rectangle(
                 x=>$qrygapx,y=>$qrygapy,
                 width=>$qrygapw,height=>$qrygaph,
                 style=>{
-                     fill=>$gap_color, stroke=>'none'
+                     fill=>$gap_color, stroke=>$gap_color, 'stroke-width'=>0
                        }
              );
     }

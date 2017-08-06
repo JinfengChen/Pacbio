@@ -31,12 +31,16 @@ if [ ! -e $pep\_Tpase_blast_results.txt ]; then
     blastall -p blastp -i $pep -d $TPASE_PATH -e 1e-10 -o $pep\_Tpase_blast_results.txt -a $SLURM_NTASKS
 fi
 
-EVM_GFF=FCM_all.pep.gff
+#EVM_GFF=FCM_all.pep.gff
+GENOME=Fairchild_v1.fasta
+EVM_GFF=test.gff
 MAKER_GFF=Fairchildv1.all.gff
 PASA_AS_GFF=FCM_all.pep.noTE.AS_10kb.gff
 REPEAT_GFF=Fairchild_v1.fasta.RepeatMasker.out.gff
 TE_BLASTP=$pep\_Tpase_blast_results.txt
 US_BLASTP=$pep\_uniprot_sprot_blast_results.txt
+OUTPUT=Fairchild.optimized_model
+
 
 python optimize_gene_model.py --evm_gff $EVM_GFF \
                               --maker_gff $MAKER_GFF \
@@ -44,7 +48,8 @@ python optimize_gene_model.py --evm_gff $EVM_GFF \
                               --repeat_gff $REPEAT_GFF \
                               --TE_blastp $TE_BLASTP \
                               --US_blastp $US_BLASTP \
-                              --output Fairchild.optimized_model 
+                              --genome $GENOME \
+                              --output $OUTPUT 
 
 
 #module unload perl
@@ -60,14 +65,16 @@ python optimize_gene_model.py --evm_gff $EVM_GFF \
 #cut -f2 $noTE\.mrna_gene.table > $noTE\.gene.id
 #perl getidgff.pl -l $noTE\.gene.id -g $pre\.gff -o $pre\.noTE.gff
 
-#module load augustus
-#lineage=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/dataset/embryophyta_odb9
-#export AUGUSTUS_CONFIG_PATH=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/augustus_config
-#temp=/rhome/cjinfeng/Rice/Rice_population_sequence/BUSCO/PlantGenome/tmp
-#output=$pre\.BUSCO
+module load augustus
+lineage=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/dataset/embryophyta_odb9
+export AUGUSTUS_CONFIG_PATH=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/augustus_config
+temp=/rhome/cjinfeng/Rice/Rice_population_sequence/BUSCO/PlantGenome/tmp
+#protein=$OUTPUT\.noTE.pep.fa
+protein=$OUTPUT\.noTE_highqual.pep.fa
+output=$protein\.BUSCO
 
-#if [ ! -e "run_$output" ]; then
-#   python ~/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/scripts/run_BUSCO.py --in $noTE --cpu $SLURM_NTASKS --out $output --lineage_path $lineage --mode prot --tmp_path $temp
-#fi
+if [ -e $protein ] && [ ! -e "run_$output" ]; then
+   python ~/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/scripts/run_BUSCO.py --in $protein --cpu $SLURM_NTASKS --out $output --lineage_path $lineage --mode prot --tmp_path $temp
+fi
 
 echo "Done"

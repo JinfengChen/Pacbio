@@ -100,6 +100,55 @@ def write_pep_from_gff(gff, genome, tools):
         os.system(cmd)
  
 
+def select_gene_model(source_gene_id, source_gff, pasa_as_gff, prefix, subtitle):
+    if not os.path.exists('{}.db'.format(source_gff)):
+        gffutils.create_db(source_gff, dbfn='{}.db'.format(source_gff), merge_strategy="create_unique")
+    source_gff_db = gffutils.FeatureDB('{}.db'.format(source_gff), keep_order=True)
+
+    if not os.path.exists('{}.db'.format(pasa_as_gff)):
+        gffutils.create_db(pasa_as_gff, dbfn='{}.db'.format(pasa_as_gff), merge_strategy="create_unique")
+    pasa_as_gff_db = gffutils.FeatureDB('{}.db'.format(pasa_as_gff), keep_order=True)
+    source_gene_exons  = get_gene_exon_num(source_gff)
+    pasa_as_gene_exons = get_gene_exon_num(pasa_as_gff)   
+
+    gff_out_file = '{}.{}.gff'.format(prefix, subtitle)
+    if os.path.exists(gff_out_file):
+        return gff_out_file
+
+    count_total    = 0
+    count_pasa     = 0
+    count_utr_long = 0
+    count_no_pasa  = 0
+    count_exon_num = 0
+    count_exon_len = 0
+    gff_out = gffutils.gffwriter.GFFWriter(gff_out_file)    
+    for gene in sorted(source_gene_id.keys()):
+        count_total += 1
+        if not pasa_as_gene_exons.has_key(gene):
+            count_no_pasa += 1
+            gff_out.write_gene_recs(source_gff_db, gene)
+            continue
+        if source_gene_exons[gene][0] == pasa_as_gene_exons[gene][0]:
+            if pasa_as_gene_exons[gene][2] == 1:
+                count_utr_long += 1
+                gff_out.write_gene_recs(source_gff_db, gene)
+                continue
+            if pasa_as_gene_exons[gene][1] >= 0.9 * source_gene_exons[gene][1] and pasa_as_gene_exons[gene][1] <= 1.1 * source_gene_exons[gene][1]:
+                count_pasa += 1
+                gff_out.write_gene_recs(pasa_as_gff_db, gene)
+            else:
+                count_exon_len += 1
+                gff_out.write_gene_recs(source_gff_db, gene)
+        else:
+            count_exon_num += 1
+            gff_out.write_gene_recs(source_gff_db, gene)
+    print 'total gene model: {}'.format(count_total)
+    print 'genes without pasa models: {}'.format(count_no_pasa)
+    print 'genes utr too long (>1.5 kb): {}'.format(count_utr_long)
+    print 'genes cds number different: {}'.format(count_exon_num)
+    print 'genes cds length different: {}'.format(count_exon_len)
+    print 'genes write as pasa model: {}'.format(count_pasa)
+    return gff_out_file 
 
 def write_gene_gff(gff, gene_repeat_id, prefix, subtitle, reverse):
     if not os.path.exists('{}.db'.format(gff)):
@@ -119,17 +168,45 @@ def write_gene_gff(gff, gene_repeat_id, prefix, subtitle, reverse):
                 gff_noTE.write_gene_recs(gff_db, gene.id)
     return gff_noTE_file
 
+def get_gene_id(gff):
+    if not os.path.exists('{}.db'.format(gff)):
+        gffutils.create_db(gff, dbfn='{}.db'.format(gff), merge_strategy="create_unique")
+    gff_db = gffutils.FeatureDB('{}.db'.format(gff), keep_order=True)
+    gene_id = defaultdict(lambda : int())
+    for gene in gff_db.features_of_type('gene', order_by='start'):
+        gene_id[gene.id] = 1
+    return gene_id 
+
 def get_gene_exon_num(gff):
     if not os.path.exists('{}.db'.format(gff)):
         gffutils.create_db(gff, dbfn='{}.db'.format(gff), merge_strategy="create_unique")
     gff_db = gffutils.FeatureDB('{}.db'.format(gff), keep_order=True)
     gene_exon_num = defaultdict(lambda : int())
     for gene in gff_db.features_of_type('gene', order_by='start'):
-        exon_num = len(list(gff_db.children(gene, featuretype='CDS', level=2)))
+        mRNA_longest = ''
+        mRNA_len     = 0
+        utr_flag     = 0
+        utr_mrna_t   = 0
+        utr_long_t   = 0
+        for mRNA in gff_db.children(gene, featuretype="mRNA"):
+            cds_len = 0
+            for CDS in gff_db.children(mRNA, featuretype="CDS"):
+                cds_len += CDS[4] - CDS[3] + 1
+            if cds_len > mRNA_len:
+                mRNA_len     = cds_len
+                mRNA_longest = mRNA.id 
+            utr_mrna_t += 1
+            for UTR in gff_db.children(mRNA, featuretype=['three_prime_UTR', 'five_prime_UTR']):
+                utr_len = UTR[4] - UTR[3] + 1
+                if utr_len > 1500:
+                    utr_long_t += 1
+        if utr_long_t == utr_mrna_t:
+            utr_flag = 1
+        exon_num = len(list(gff_db.children(mRNA_longest, featuretype='CDS', level=1)))
         exon_len = 0
-        for exon in list(gff_db.children(gene, featuretype='CDS', level=2)):
+        for exon in list(gff_db.children(mRNA_longest, featuretype='CDS', level=1)):
             exon_len += exon[4] - exon[3] + 1
-        gene_exon_num[gene.id] = [exon_num, exon_len]
+        gene_exon_num[gene.id] = [exon_num, exon_len, utr_flag]
         #print('{}\t{}'.format(gene.id, exon_num))
     return gene_exon_num
 
@@ -228,6 +305,13 @@ def main():
     gene_low_quality_id    = filter_repeat_gene(args.evm_gff, args.repeat_gff, gene_swissprot_id, gene_exon_num)
     evm_noTE_highqual_gff  = write_gene_gff(evm_noTE_gff, gene_low_quality_id, args.output, 'noTE_highqual', 1)
     write_pep_from_gff(evm_noTE_highqual_gff, args.genome, tools)
+
+    #process AS
+    gene_evm_noTE_highqual_id = get_gene_id(evm_noTE_highqual_gff)
+    #evm_noTE_highqual_AS_gff  = write_gene_gff(args.pasa_as_gff, gene_evm_noTE_highqual_id, args.output, 'noTE_highqual_AS', 0)
+    #write_pep_from_gff(evm_noTE_highqual_AS_gff, args.genome, tools)
+    evm_noTE_highqual_AS_best_gff = select_gene_model(gene_evm_noTE_highqual_id, evm_noTE_highqual_gff, args.pasa_as_gff, args.output, 'noTE_highqual_AS_best')
+    write_pep_from_gff(evm_noTE_highqual_AS_best_gff, args.genome, tools) 
 
 if __name__ == '__main__':
     main()

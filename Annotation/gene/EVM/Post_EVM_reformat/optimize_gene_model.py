@@ -99,8 +99,43 @@ def write_pep_from_gff(gff, genome, tools):
         print(cmd)
         os.system(cmd)
  
+def replace_gene_fusion(gene_info, maker_gff_db):
+    print 'in replace function: {}, {}, {}'.format(gene_info.seqid, gene_info.start, gene_info.end)
+    predictor_num = defaultdict(lambda : list())
+    for overlap_gene in maker_gff_db.region(region=(gene_info.seqid, gene_info.start, gene_info.end), featuretype=['gene']):
+        #print overlap_gene
+        if overlap_gene[1] == 'maker':
+            predictor_num['maker'].append(overlap_gene.id)
+        elif overlap_gene[1] == 'fgenesh_masked':
+            predictor_num['fgenesh'].append(overlap_gene.id)
+        elif overlap_gene[1] == 'augustus_masked':
+            predictor_num['augustus'].append(overlap_gene.id)
+        elif overlap_gene[1] == 'snap_masked':
+            predictor_num['snap'].append(overlap_gene.id)
+        elif overlap_gene[1] == 'genemark':
+            predictor_num['genemark'].append(overlap_gene.id)
+    fusion_count = 0
+    for p in predictor_num.keys():
+        if len(predictor_num[p]) == 2:
+            fusion_count += 1
+    #print 'fusion: {}'.format(fusion_count)
+    if fusion_count >= 3:
+        print 'fusion: {}'.format(fusion_count)
+        print 'gene info: {}, {}, {}'.format(gene_info.seqid, gene_info.start, gene_info.end)
+        if len(predictor_num['maker']) == 2:
+            return predictor_num['maker']
+        elif len(predictor_num['fgenesh']) == 2:
+            return predictor_num['fgenesh']
+        elif len(predictor_num['augustus']) == 2:            
+            return predictor_num['augustus']
+        elif len(predictor_num['genemark']) == 2:
+            return predictor_num['genemark']
+        else:
+            return ['']
+    else: 
+        return ['']
 
-def select_gene_model(source_gene_id, source_gff, pasa_as_gff, prefix, subtitle):
+def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix, subtitle):
     if not os.path.exists('{}.db'.format(source_gff)):
         gffutils.create_db(source_gff, dbfn='{}.db'.format(source_gff), merge_strategy="create_unique")
     source_gff_db = gffutils.FeatureDB('{}.db'.format(source_gff), keep_order=True)
@@ -108,6 +143,11 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, prefix, subtitle)
     if not os.path.exists('{}.db'.format(pasa_as_gff)):
         gffutils.create_db(pasa_as_gff, dbfn='{}.db'.format(pasa_as_gff), merge_strategy="create_unique")
     pasa_as_gff_db = gffutils.FeatureDB('{}.db'.format(pasa_as_gff), keep_order=True)
+
+    if not os.path.exists('{}.db'.format(maker_gff)):
+        gffutils.create_db(maker_gff, dbfn='{}.db'.format(maker_gff), merge_strategy="create_unique")
+    maker_gff_db = gffutils.FeatureDB('{}.db'.format(maker_gff), keep_order=True)
+
     source_gene_exons  = get_gene_exon_num(source_gff)
     pasa_as_gene_exons = get_gene_exon_num(pasa_as_gff)   
 
@@ -117,17 +157,30 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, prefix, subtitle)
 
     count_total    = 0
     count_pasa     = 0
+    count_fusion   = 0
     count_utr_long = 0
     count_no_pasa  = 0
     count_exon_num = 0
     count_exon_len = 0
     gff_out = gffutils.gffwriter.GFFWriter(gff_out_file)    
     for gene in sorted(source_gene_id.keys()):
+        print 'process gene model: {}'.format(gene)
         count_total += 1
+        gene_fusion_model = replace_gene_fusion(source_gff_db[gene], maker_gff_db)
+        print 'fusion model: {}'.format(gene_fusion_model)
+        if len(gene_fusion_model) > 1:
+            count_fusion += 1
+            print '{}: {}'.format(gene, source_gff_db[gene])
+            print 'replaced: {}'.format(gene_fusion_model)
+            for temp_gene in sorted(gene_fusion_model):
+                gff_out.write_gene_recs(maker_gff_db, temp_gene)
+            continue
+
         if not pasa_as_gene_exons.has_key(gene):
             count_no_pasa += 1
             gff_out.write_gene_recs(source_gff_db, gene)
             continue
+
         if source_gene_exons[gene][0] == pasa_as_gene_exons[gene][0]:
             if pasa_as_gene_exons[gene][2] == 1:
                 count_utr_long += 1
@@ -142,8 +195,10 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, prefix, subtitle)
         else:
             count_exon_num += 1
             gff_out.write_gene_recs(source_gff_db, gene)
+
     print 'total gene model: {}'.format(count_total)
     print 'genes without pasa models: {}'.format(count_no_pasa)
+    print 'gene fusion: {}'.format(count_fusion)
     print 'genes utr too long (>1.5 kb): {}'.format(count_utr_long)
     print 'genes cds number different: {}'.format(count_exon_num)
     print 'genes cds length different: {}'.format(count_exon_len)
@@ -288,7 +343,7 @@ def main():
     tools["getgene"]  = 'perl {}/getGene.pl'.format(script_path)   
     tools["cds2aa"]  = 'perl {}/cds2aa.pl'.format(script_path)
     tools["blast2blastm8"]  = 'perl {}/blast2blastm8.pl'.format(script_path)
-
+    gene_fusion_list = 'optimize_gene_model.gene_fusion.manual.list'
  
     #filter by Tpase
     mrna_repeat_id_file = blast_best_hit_list(args.TE_blastp, tools, 0.7)
@@ -310,7 +365,7 @@ def main():
     gene_evm_noTE_highqual_id = get_gene_id(evm_noTE_highqual_gff)
     #evm_noTE_highqual_AS_gff  = write_gene_gff(args.pasa_as_gff, gene_evm_noTE_highqual_id, args.output, 'noTE_highqual_AS', 0)
     #write_pep_from_gff(evm_noTE_highqual_AS_gff, args.genome, tools)
-    evm_noTE_highqual_AS_best_gff = select_gene_model(gene_evm_noTE_highqual_id, evm_noTE_highqual_gff, args.pasa_as_gff, args.output, 'noTE_highqual_AS_best')
+    evm_noTE_highqual_AS_best_gff = select_gene_model(gene_evm_noTE_highqual_id, evm_noTE_highqual_gff, args.pasa_as_gff, args.maker_gff, args.output, 'noTE_highqual_AS_best', gene_fusion_list)
     write_pep_from_gff(evm_noTE_highqual_AS_best_gff, args.genome, tools) 
 
 if __name__ == '__main__':

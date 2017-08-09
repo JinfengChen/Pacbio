@@ -10,12 +10,12 @@
 
 module load bedops/2.4.24
 
-noTE_pre=FCM_all.pep.noTE
+noTE_pre=Fairchild.optimized_model.noTE_highqual_AS_best
 locus_tag=BTW09_
 
 awk '$3=="gene"' $noTE_pre\.gff > $noTE_pre\.gene.gff
 gff2bed < $noTE_pre\.gene.gff > $noTE_pre\.gene.bed
 python -m jcvi.annotation.reformat rename --prefix=$locus_tag $noTE_pre\.gene.bed 
-
+mv BTW09_.ids $noTE_pre\.gene.bed.ids
 
 echo "Done"

@@ -34,7 +34,8 @@ fi
 #EVM_GFF=FCM_all.pep.gff
 GENOME=Fairchild_v1.fasta
 EVM_GFF=test.gff
-MAKER_GFF=Fairchildv1.all.gff
+#MAKER_GFF=Fairchildv1.all.gff
+MAKER_GFF=ABINITIO_PREDICTION.gff
 PASA_AS_GFF=FCM_all.pep.noTE.AS_10kb.gff
 REPEAT_GFF=Fairchild_v1.fasta.RepeatMasker.out.gff
 TE_BLASTP=$pep\_Tpase_blast_results.txt
@@ -70,7 +71,7 @@ lineage=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/datase
 export AUGUSTUS_CONFIG_PATH=/rhome/cjinfeng/BigData/00.RD/Assembly/Pacbio/install/BUSCO/busco/augustus_config
 temp=/rhome/cjinfeng/Rice/Rice_population_sequence/BUSCO/PlantGenome/tmp
 #protein=$OUTPUT\.noTE.pep.fa
-protein=$OUTPUT\.noTE_highqual.pep.fa
+protein=$OUTPUT\.noTE_highqual_AS_best.pep.fa
 output=$protein\.BUSCO
 
 if [ -e $protein ] && [ ! -e "run_$output" ]; then

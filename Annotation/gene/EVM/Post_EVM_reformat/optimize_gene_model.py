@@ -95,6 +95,8 @@ def write_pep_from_gff(gff, genome, tools):
     cmds = []
     cmds.append('{} {} {} > {}.cds.fa'.format(tools['getgene'], gff, genome, prefix))
     cmds.append('{} {}.cds.fa > {}.pep.fa'.format(tools['cds2aa'], prefix, prefix))
+    if os.path.exists('{}.pep.fa'.format(prefix)):
+        return
     for cmd in cmds:
         print(cmd)
         os.system(cmd)
@@ -135,7 +137,19 @@ def replace_gene_fusion(gene_info, maker_gff_db):
     else: 
         return ['']
 
-def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix, subtitle):
+def read_gene_fusion_list(gene_fusion_list):
+    gene_fusion_dict = defaultdict(lambda : list())
+    for line in np.loadtxt(gene_fusion_list, dtype=str): 
+        evm_genes   = re.split(r';', line[0])
+        maker_genes = re.split(r';', line[1])
+        for i in range(len(evm_genes)):
+            if i == 0:
+                gene_fusion_dict[evm_genes[i]] = maker_genes
+            else:
+                gene_fusion_dict[evm_genes[i]] = ['']
+    return gene_fusion_dict
+
+def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix, subtitle, gene_fusion_list):
     if not os.path.exists('{}.db'.format(source_gff)):
         gffutils.create_db(source_gff, dbfn='{}.db'.format(source_gff), merge_strategy="create_unique")
     source_gff_db = gffutils.FeatureDB('{}.db'.format(source_gff), keep_order=True)
@@ -155,6 +169,8 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
     if os.path.exists(gff_out_file):
         return gff_out_file
 
+    gene_fusion_dict = read_gene_fusion_list(gene_fusion_list)
+
     count_total    = 0
     count_pasa     = 0
     count_fusion   = 0
@@ -166,7 +182,8 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
     for gene in sorted(source_gene_id.keys()):
         print 'process gene model: {}'.format(gene)
         count_total += 1
-        gene_fusion_model = replace_gene_fusion(source_gff_db[gene], maker_gff_db)
+        
+        '''gene_fusion_model = replace_gene_fusion(source_gff_db[gene], maker_gff_db)
         print 'fusion model: {}'.format(gene_fusion_model)
         if len(gene_fusion_model) > 1:
             count_fusion += 1
@@ -174,6 +191,15 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
             print 'replaced: {}'.format(gene_fusion_model)
             for temp_gene in sorted(gene_fusion_model):
                 gff_out.write_gene_recs(maker_gff_db, temp_gene)
+            continue
+        '''
+        if gene_fusion_dict.has_key(gene):
+            count_fusion += 1
+            print '{}: {}'.format(gene, source_gff_db[gene])
+            print 'replaced: {}'.format(gene_fusion_dict[gene])
+            for temp_gene in gene_fusion_dict[gene]:
+                if not temp_gene == '' and not temp_gene == 'NA':
+                    gff_out.write_gene_recs(maker_gff_db, temp_gene)
             continue
 
         if not pasa_as_gene_exons.has_key(gene):

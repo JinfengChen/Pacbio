@@ -63,32 +63,52 @@ def readtable(infile):
     return data
 
 def filter_repeat_gene(gene_gff, repeat_gff, gene_swissprot_id, gene_exon_num):
+    mrna_info = defaultdict(lambda : list())
+    for gene in sorted(gene_exon_num.keys()):
+        mrna   = gene_exon_num[gene][4]
+        cdsn   = gene_exon_num[gene][0]
+        #print 'longest mRNA: {} {} {}'.format(mrna, gene, cdsn)
+        mrna_info[mrna] = [gene, cdsn]
+
     from pybedtools import BedTool
     repeats = BedTool(repeat_gff) 
     genes   = BedTool(gene_gff)
     genes_in_repeat = defaultdict(lambda : int())
+    genes_in_repeat_nonprotein = defaultdict(lambda : int())
+    mrna_repeat_dict = defaultdict(lambda : defaultdict(lambda : int()))
     for g in genes.intersect(repeats):
-        if g[2] == 'gene':
+        #print g
+        if g[2] == 'CDS':
                 temp  = defaultdict(str)
                 attrs = re.split(r';', g[8])
                 for attr in attrs:
                     if not attr == '':
                         idx, value = re.split(r'\=', attr)
                         temp[idx] = value
-                gene_id   = temp['ID']
+                cds_id   = '{}_{}_{}'.format(temp['ID'], g[3], g[4])
+                mrna_id  = temp['Parent']
+                #print 'CDS: {}, {}'.format(mrna_id, cds_id)
+                mrna_repeat_dict[mrna_id][cds_id] = 1
+    for m in sorted(mrna_repeat_dict.keys()):
+        cdsn = len(mrna_repeat_dict[m].keys())
+        #print 'mRNA: {}, {}'.format(m, cdsn)
+        if mrna_info.has_key(m):
+            if float(cdsn)/mrna_info[m][1] > 0.7:
+                gene_id = mrna_info[m][0]
                 genes_in_repeat[gene_id] = 1
     genes_low_quality = defaultdict(lambda : int())
     count_temp = 0
     for g in sorted(genes_in_repeat.keys()): 
         if not gene_swissprot_id.has_key(g):
             count_temp += 1
+            genes_in_repeat_nonprotein[g] = 1
             if gene_exon_num.has_key(g):
                 if gene_exon_num[g][0] <= 2 and gene_exon_num[g][1] <= 600:
                     genes_low_quality[g] = 1
     print 'number of gene in repeat {}'.format(len(genes_in_repeat.keys()))
     print 'number of gene in repeat without swissprot hit {}'.format(count_temp)
     print 'number of gene i low quality {}'.format(len(genes_low_quality.keys()))
-    return genes_low_quality
+    return genes_low_quality, genes_in_repeat
  
 def write_pep_from_gff(gff, genome, tools):
     prefix = os.path.splitext(gff)[0]
@@ -149,7 +169,7 @@ def read_gene_fusion_list(gene_fusion_list):
                 gene_fusion_dict[evm_genes[i]] = ['']
     return gene_fusion_dict
 
-def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix, subtitle, gene_fusion_list):
+def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix, subtitle, gene_fusion_list, gene_in_repeat_id):
     if not os.path.exists('{}.db'.format(source_gff)):
         gffutils.create_db(source_gff, dbfn='{}.db'.format(source_gff), merge_strategy="create_unique")
     source_gff_db = gffutils.FeatureDB('{}.db'.format(source_gff), keep_order=True)
@@ -171,10 +191,13 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
 
     gene_fusion_dict = read_gene_fusion_list(gene_fusion_list)
 
+    intron_cutoff  = 10000
     count_total    = 0
     count_pasa     = 0
     count_fusion   = 0
     count_utr_long = 0
+    count_intron_long  = 0
+    count_intron_long2 = 0
     count_no_pasa  = 0
     count_exon_num = 0
     count_exon_len = 0
@@ -182,7 +205,7 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
     for gene in sorted(source_gene_id.keys()):
         print 'process gene model: {}'.format(gene)
         count_total += 1
-        
+
         '''gene_fusion_model = replace_gene_fusion(source_gff_db[gene], maker_gff_db)
         print 'fusion model: {}'.format(gene_fusion_model)
         if len(gene_fusion_model) > 1:
@@ -204,14 +227,36 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
 
         if not pasa_as_gene_exons.has_key(gene):
             count_no_pasa += 1
-            gff_out.write_gene_recs(source_gff_db, gene)
-            continue
+            if source_gene_exons[gene][3] > intron_cutoff and gene_in_repeat_id.has_key(gene):
+                count_intron_long += 1
+                print 'long intron gene out: {}'.format(gene)
+                continue
+            else:
+                if source_gene_exons[gene][3] > intron_cutoff:
+                    print 'long intron gene still in: {}'.format(gene)
+                    count_intron_long2 += 1
+                gff_out.write_gene_recs(source_gff_db, gene)
+                continue
 
         if source_gene_exons[gene][0] == pasa_as_gene_exons[gene][0]:
+            #if pasa_as_gene_exons[gene][2] == 1:
+            #    count_utr_long += 1
+            #    gff_out.write_gene_recs(source_gff_db, gene)
+            #    continue
+            if pasa_as_gene_exons[gene][3] > intron_cutoff and gene_in_repeat_id.has_key(gene):
+                count_intron_long += 1
+                #gff_out.write_gene_recs(source_gff_db, gene)
+                print 'long intron gene out: {}'.format(gene)
+                continue
+            elif pasa_as_gene_exons[gene][3] > intron_cutoff:
+                print 'long intron gene still in: {}'.format(gene)
+                count_intron_long2 += 1
+
             if pasa_as_gene_exons[gene][2] == 1:
                 count_utr_long += 1
                 gff_out.write_gene_recs(source_gff_db, gene)
                 continue
+
             if pasa_as_gene_exons[gene][1] >= 0.9 * source_gene_exons[gene][1] and pasa_as_gene_exons[gene][1] <= 1.1 * source_gene_exons[gene][1]:
                 count_pasa += 1
                 gff_out.write_gene_recs(pasa_as_gff_db, gene)
@@ -219,6 +264,17 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
                 count_exon_len += 1
                 gff_out.write_gene_recs(source_gff_db, gene)
         else:
+            if source_gene_exons[gene][3] > intron_cutoff and gene_in_repeat_id.has_key(gene):
+                count_intron_long += 1
+                print 'long intron gene out: {}'.format(gene)
+                continue
+            else:
+                if source_gene_exons[gene][3] > intron_cutoff:
+                    print 'long intron gene still in: {}'.format(gene)
+                    count_intron_long2 += 1
+                #gff_out.write_gene_recs(source_gff_db, gene)
+                #count_exon_num += 1
+                #continue 
             count_exon_num += 1
             gff_out.write_gene_recs(source_gff_db, gene)
 
@@ -226,6 +282,8 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
     print 'genes without pasa models: {}'.format(count_no_pasa)
     print 'gene fusion: {}'.format(count_fusion)
     print 'genes utr too long (>1.5 kb): {}'.format(count_utr_long)
+    print 'genes intron too long out (>10 kb): {}'.format(count_intron_long)
+    print 'genes intron too long in (>10 kb): {}'.format(count_intron_long2)
     print 'genes cds number different: {}'.format(count_exon_num)
     print 'genes cds length different: {}'.format(count_exon_len)
     print 'genes write as pasa model: {}'.format(count_pasa)
@@ -269,10 +327,20 @@ def get_gene_exon_num(gff):
         utr_flag     = 0
         utr_mrna_t   = 0
         utr_long_t   = 0
+        longest_intron = 0
         for mRNA in gff_db.children(gene, featuretype="mRNA"):
             cds_len = 0
-            for CDS in gff_db.children(mRNA, featuretype="CDS"):
+            last_exon_end = 0
+            for CDS in gff_db.children(mRNA, featuretype="CDS", order_by='start'):
                 cds_len += CDS[4] - CDS[3] + 1
+                if last_exon_end == 0:
+                   last_exon_end = CDS[4]
+                   continue
+                else:
+                   current_intron = abs(CDS[3] - last_exon_end)
+                   if current_intron > longest_intron:
+                       longest_intron = current_intron
+                   last_exon_end = CDS[4]
             if cds_len > mRNA_len:
                 mRNA_len     = cds_len
                 mRNA_longest = mRNA.id 
@@ -287,7 +355,7 @@ def get_gene_exon_num(gff):
         exon_len = 0
         for exon in list(gff_db.children(mRNA_longest, featuretype='CDS', level=1)):
             exon_len += exon[4] - exon[3] + 1
-        gene_exon_num[gene.id] = [exon_num, exon_len, utr_flag]
+        gene_exon_num[gene.id] = [exon_num, exon_len, utr_flag, longest_intron, mRNA_longest]
         #print('{}\t{}'.format(gene.id, exon_num))
     return gene_exon_num
 
@@ -383,7 +451,7 @@ def main():
     mrna_swissprot_id      = list(np.loadtxt(mrna_swissprot_id_file, dtype=str))
     gene_swissprot_id      = convert_mrna2gene(mrna_swissprot_id, args.evm_gff)
     gene_exon_num          = get_gene_exon_num(args.evm_gff) 
-    gene_low_quality_id    = filter_repeat_gene(args.evm_gff, args.repeat_gff, gene_swissprot_id, gene_exon_num)
+    gene_low_quality_id, gene_in_repeat_id = filter_repeat_gene(args.evm_gff, args.repeat_gff, gene_swissprot_id, gene_exon_num)
     evm_noTE_highqual_gff  = write_gene_gff(evm_noTE_gff, gene_low_quality_id, args.output, 'noTE_highqual', 1)
     write_pep_from_gff(evm_noTE_highqual_gff, args.genome, tools)
 
@@ -391,7 +459,7 @@ def main():
     gene_evm_noTE_highqual_id = get_gene_id(evm_noTE_highqual_gff)
     #evm_noTE_highqual_AS_gff  = write_gene_gff(args.pasa_as_gff, gene_evm_noTE_highqual_id, args.output, 'noTE_highqual_AS', 0)
     #write_pep_from_gff(evm_noTE_highqual_AS_gff, args.genome, tools)
-    evm_noTE_highqual_AS_best_gff = select_gene_model(gene_evm_noTE_highqual_id, evm_noTE_highqual_gff, args.pasa_as_gff, args.maker_gff, args.output, 'noTE_highqual_AS_best', gene_fusion_list)
+    evm_noTE_highqual_AS_best_gff = select_gene_model(gene_evm_noTE_highqual_id, evm_noTE_highqual_gff, args.pasa_as_gff, args.maker_gff, args.output, 'noTE_highqual_AS_best', gene_fusion_list, gene_in_repeat_id)
     write_pep_from_gff(evm_noTE_highqual_AS_best_gff, args.genome, tools) 
 
 if __name__ == '__main__':

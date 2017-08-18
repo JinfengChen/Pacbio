@@ -37,6 +37,13 @@ grep "^fusion: 3" filter_low_quality_gene.sh.stdout.gene_fusion -A 10 | less -S
 #check in jbrowse based on position
 grep "replaced" filter_low_quality_gene.sh.stdout -B 2
 
+#large intron
+perl ~/BigData/software/bin/gff2intron.pl --gff Fairchild.optimized_model.noTE_highqual_AS_best.gff > Fairchild.optimized_model.noTE_highqual_AS_best.intron.gff
+awk '$3=="intron" && $5-$4 > 10000' Fairchild.optimized_model.noTE_highqual_AS_best.intron.gff | less -S
+awk '$3=="intron" && $5-$4 > 10000' Fairchild.optimized_model.noTE_highqual_AS_best.intron.gff | awk '{print $5-$4}' | less -S
+python long_intron_gene.py --gff Fairchild.optimized_model.noTE_highqual_AS_best.gff > Fairchild.optimized_model.noTE_highqual_AS_best.gff.long_intron.gene.list &
+
+
 #rename gff
 sbatch add_locus_tag.sh
 

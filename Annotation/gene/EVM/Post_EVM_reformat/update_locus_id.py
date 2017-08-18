@@ -46,12 +46,14 @@ def readtable(infile):
                     data[unit[0]] = unit[1]
     return data
 
-def update_id(gff, ids):
+def update_id(gff, ids, rewrite):
     if not os.path.exists('{}.db'.format(gff)):
         gffutils.create_db(gff, dbfn='{}.db'.format(gff), merge_strategy="create_unique")
     gff_db = gffutils.FeatureDB('{}.db'.format(gff), keep_order=True)
     
     gff_out_file = '{}.locus_tag_id.gff'.format(os.path.splitext(gff)[0])
+    if os.path.exists(gff_out_file) and rewrite == 0:
+        return gff_out_file
     gff_out = gffutils.gffwriter.GFFWriter(gff_out_file, with_header=False) 
     for gene in gff_db.features_of_type('gene', order_by=['seqid', 'start']):
         #write gene
@@ -83,10 +85,10 @@ def update_id(gff, ids):
             mRNA_count += 1
             mRNA_id = curr_mRNA[0]
             mRNA_rec = gff_db[mRNA_id]
-            #mRNA_rec.id = '{}.{}'.format(ids[gene], mRNA_count)
+            mRNA_rec_id = '{}.{}'.format(ids[gene.id], mRNA_count)
             mRNA_attrs = dict(mRNA_rec.attributes)
-            mRNA_attrs['ID'] = ['{}.{}'.format(ids[gene.id], mRNA_count)]
-            mRNA_attrs['Parent'] = ids[gene.id]
+            mRNA_attrs['ID'] = [mRNA_rec_id]
+            mRNA_attrs['Parent'] = [ids[gene.id]]
             mRNA_rec_new = gffutils.Feature(
                 seqid=mRNA_rec.chrom,
                 source='Fairchild_v1.0',
@@ -97,19 +99,23 @@ def update_id(gff, ids):
                 attributes=mRNA_attrs)
             gff_out.write_rec(mRNA_rec_new)
             #write exon/cds/utr
-            write_mRNA_children(gff_out, gff_db, mRNA_rec, mRNA_rec_new) 
+            write_mRNA_children(gff_out, gff_db, mRNA_rec, mRNA_rec_id) 
+    return gff_out_file
 
-
-def write_mRNA_children(gff_out, db, mRNA_rec_old, mRNA_rec):
-    mRNA_children = db.children(mRNA_rec_old.id, order_by='start')
+def write_mRNA_children(gff_out, db, mRNA_rec, mRNA_rec_id):
+    print 'writing mRNA childern: {}'.format(mRNA_rec_id)
+    mRNA_children = db.children(mRNA_rec, order_by='start')
     features = ['exon', 'CDS', 'five_prime_UTR', 'three_prime_UTR'] 
     for child_rec in mRNA_children:
+        print child_rec
         counter = defaultdict(lambda : int())
-        for ft in features:
+        if child_rec.featuretype in features:
+            ft = child_rec.featuretype
             counter[ft] += 1
             #child_rec.id = '{}:exon{}'.format(mRNA_rec.id, exon_count)
             attrs = dict(child_rec.attributes)
-            attrs['ID'] = ['{}:{}{}'.format(mRNA_rec.id, ft, counter[ft])]
+            attrs['ID'] = ['{}:{}{}'.format(mRNA_rec_id, ft, counter[ft])]
+            attrs['Parent'] = [mRNA_rec_id]
             child_rec = gffutils.Feature(
                 seqid=child_rec.chrom,
                 source='Fairchild_v1.0',
@@ -120,10 +126,22 @@ def write_mRNA_children(gff_out, db, mRNA_rec_old, mRNA_rec):
                 attributes=attrs)
             gff_out.write_rec(child_rec)
 
+def write_pep_from_gff(gff, genome, tools):
+    prefix = os.path.splitext(gff)[0]
+    cmds = []
+    cmds.append('{} {} {} > {}.cds.fa'.format(tools['getgene'], gff, genome, prefix))
+    cmds.append('{} {}.cds.fa > {}.pep.fa'.format(tools['cds2aa'], prefix, prefix))
+    if os.path.exists('{}.pep.fa'.format(prefix)):
+        return
+    for cmd in cmds:
+        print(cmd)
+        os.system(cmd)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gff')
     parser.add_argument('--id')
+    parser.add_argument('--genome')
     parser.add_argument('-v', dest='verbose', action='store_true')
     args = parser.parse_args()
     try:
@@ -131,11 +149,24 @@ def main():
     except:
         usage()
         sys.exit(2)
+   
+    tools = defaultdict(lambda : str())
+    script_path = '{}/scripts'.format(os.path.dirname(os.path.realpath(sys.argv[0]))) 
+    tools["solar"]     = 'perl ~/BigData/00.RD/Annotation/HEG4/protein-map-genome/bin/solar/solar.pl'
+    tools["bestalign"] = 'perl {}/bestAlign.pl'.format(script_path)
+    tools["fastadeal"] = 'perl {}/fastaDeal.pl'.format(script_path)
+    tools["getidseq="] = 'perl {}/getidseq.pl'.format(script_path)
+    tools["getidgff"]  = 'perl {}/getidgff.pl'.format(script_path)
+    tools["getgene"]  = 'perl {}/getGene.pl'.format(script_path)   
+    tools["cds2aa"]  = 'perl {}/cds2aa.pl'.format(script_path)
+    tools["blast2blastm8"]  = 'perl {}/blast2blastm8.pl'.format(script_path)
+
 
     ids = defaultdict(lambda : str())
     for line in np.loadtxt(args.id, dtype=str):
         ids[line[0]] = line[1]
-    update_id(args.gff, ids)
+    new_gff = update_id(args.gff, ids, 0)
+    write_pep_from_gff(new_gff, args.genome, tools) 
 
 if __name__ == '__main__':
     main()

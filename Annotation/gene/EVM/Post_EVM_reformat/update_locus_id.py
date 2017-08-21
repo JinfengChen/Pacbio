@@ -10,6 +10,7 @@ from Bio import SeqIO
 sys.path.append('/rhome/cjinfeng/BigData/software/ProgramPython/lib')
 from utility import gff_parser, createdir
 import gffutils
+import subprocess
 
 
 def usage():
@@ -51,7 +52,9 @@ def update_id(gff, ids, rewrite):
         gffutils.create_db(gff, dbfn='{}.db'.format(gff), merge_strategy="create_unique")
     gff_db = gffutils.FeatureDB('{}.db'.format(gff), keep_order=True)
     
-    gff_out_file = '{}.locus_tag_id.gff'.format(os.path.splitext(gff)[0])
+    #gff_out_file_temp = '{}.locus_tag_id.temp.gff'.format(os.path.splitext(gff)[0])
+    gff_out_file      = '{}.locus_tag_id.gff'.format(os.path.splitext(gff)[0])
+    
     if os.path.exists(gff_out_file) and rewrite == 0:
         return gff_out_file
     gff_out = gffutils.gffwriter.GFFWriter(gff_out_file, with_header=False) 
@@ -99,7 +102,11 @@ def update_id(gff, ids, rewrite):
                 attributes=mRNA_attrs)
             gff_out.write_rec(mRNA_rec_new)
             #write exon/cds/utr
-            write_mRNA_children(gff_out, gff_db, mRNA_rec, mRNA_rec_id) 
+            write_mRNA_children(gff_out, gff_db, mRNA_rec, mRNA_rec_id)
+    #clean_cmd = "sed 's/5_prime_partial=true;//g' {} | sed 's/3_prime_partial=true;//g' > {}".format(gff_out_file_temp, gff_out_file)
+    #print clean_cmd
+    #os.system(clean_cmd)
+    #failure = subprocess.call(clean_cmd, shell=True)
     return gff_out_file
 
 def write_mRNA_children(gff_out, db, mRNA_rec, mRNA_rec_id):

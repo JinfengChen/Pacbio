@@ -102,9 +102,10 @@ def filter_repeat_gene(gene_gff, repeat_gff, gene_swissprot_id, gene_exon_num):
         if not gene_swissprot_id.has_key(g):
             count_temp += 1
             genes_in_repeat_nonprotein[g] = 1
-            if gene_exon_num.has_key(g):
-                if gene_exon_num[g][0] <= 2 and gene_exon_num[g][1] <= 600:
-                    genes_low_quality[g] = 1
+            #if gene_exon_num.has_key(g):
+                #if gene_exon_num[g][0] <= 2 and gene_exon_num[g][1] <= 600:
+                #    genes_low_quality[g] = 1
+            genes_low_quality[g] = 1    
     print 'number of gene in repeat {}'.format(len(genes_in_repeat.keys()))
     print 'number of gene in repeat without swissprot hit {}'.format(count_temp)
     print 'number of gene i low quality {}'.format(len(genes_low_quality.keys()))
@@ -191,7 +192,7 @@ def select_gene_model(source_gene_id, source_gff, pasa_as_gff, maker_gff, prefix
 
     gene_fusion_dict = read_gene_fusion_list(gene_fusion_list)
 
-    intron_cutoff  = 10000
+    intron_cutoff  = 20000
     count_total    = 0
     count_pasa     = 0
     count_fusion   = 0
@@ -370,32 +371,42 @@ def convert_mrna2gene(mrna, gff):
         #print '{}: {}'.format(mrna_id, gene[0])
     return gene_id
 
+'''
 def blast_best_hit_list_us(blast, tools, cutoff):
     if not os.path.exists(blast):
         print '{} not exists'.format(blast)
         sys.exit(2)
-    table_out = '{}.m8'.format(os.path.splitext(blast)[0])
     cmds = []
-    if not os.path.exists(table_out):
-        cmds.append('{} {} > {}'.format(tools["blast2blastm8"], blast, table_out))
+    table_out = '{}.m8'.format(os.path.splitext(blast)[0])
+    if blast.endswith('.m8'):
+        table_out = blast
+    else: 
+        if not os.path.exists(table_out):
+            cmds.append('{} {} > {}'.format(tools["blast2blastm8"], blast, table_out))
     if not os.path.exists(solar_out):
         cmds.append('{} -d -1 {} > {}'.format(tools["solar"], table_out, solar_out)) 
     if len(cmds) > 0:
         for cmd in cmds:
             print cmd
             os.system(cmd)
-    
+'''    
 
 def blast_best_hit_list(blast, tools, cutoff):
     if not os.path.exists(blast):
         print '{} not exists'.format(blast)
         sys.exit(2)
+    m8 = 0
+    if blast.endswith('.m8'):
+        m8 = 1
 
     solar_out = '{}.solar'.format(os.path.splitext(blast)[0])
     best_id   = '{}.solar.id'.format(os.path.splitext(blast)[0])
     cmds = []
     if not os.path.exists(solar_out):
-        cmds.append('{} -d -1 {} > {}'.format(tools["solar"], blast, solar_out))
+        if m8 == 1:
+            cmds.append('{} -f m8 -d -1 {} > {}'.format(tools["solar"], blast, solar_out))
+        else:
+            cmds.append('{} -d -1 {} > {}'.format(tools["solar"], blast, solar_out))
     if not os.path.exists(best_id):
         cmds.append('{} {} -cutoff {} | cut -f1 > {}'.format(tools["bestalign"], solar_out, cutoff, best_id))
     if len(cmds) > 0:

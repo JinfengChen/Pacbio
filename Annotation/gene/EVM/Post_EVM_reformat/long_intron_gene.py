@@ -46,8 +46,8 @@ def get_gene_exon_num(gff):
                    continue
                 else:
                    current_intron = abs(CDS[3] - last_exon_end)
-                   if gene.id == "evm.TU.chr1.101":
-                       print '{} {} {} {} {} {} {}'.format(gene, mRNA, CDS, CDS[3], last_exon_end, current_intron, longest_intron)
+                   #if gene.id == "evm.TU.chr1.101":
+                   #    print '{} {} {} {} {} {} {}'.format(gene, mRNA, CDS, CDS[3], last_exon_end, current_intron, longest_intron)
   
                    if current_intron > longest_intron:
                        longest_intron = current_intron
@@ -66,7 +66,7 @@ def get_gene_exon_num(gff):
         exon_len = 0
         for exon in list(gff_db.children(mRNA_longest, featuretype='CDS', level=1)):
             exon_len += exon[4] - exon[3] + 1
-        gene_exon_num[gene.id] = [exon_num, exon_len, utr_flag, longest_intron]
+        gene_exon_num[gene.id] = [exon_num, exon_len, utr_flag, longest_intron, gene]
         #print('{}\t{}'.format(gene.id, exon_num))
     return gene_exon_num
 
@@ -87,7 +87,7 @@ def main():
 
     for gene in sorted(gene_info.keys()):
         if gene_info[gene][3] > 10000:
-            print '{}: {}'.format(gene, gene_info[gene][3])
+            print '{}: {} {}'.format(gene, gene_info[gene][3], gene_info[gene][4])
 
 if __name__ == '__main__':
     main()

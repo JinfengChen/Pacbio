@@ -39,7 +39,8 @@ MAKER_GFF=ABINITIO_PREDICTION.gff
 PASA_AS_GFF=FCM_all.pep.noTE.AS_10kb.gff
 REPEAT_GFF=Fairchild_v1.fasta.RepeatMasker.out.gff
 TE_BLASTP=$pep\_Tpase_blast_results.txt
-US_BLASTP=$pep\_uniprot_sprot_blast_results.txt
+#US_BLASTP=$pep\_uniprot_sprot_blast_results.txt
+US_BLASTP=$pep\_protein_blast_results.m8
 OUTPUT=Fairchild.optimized_model
 
 

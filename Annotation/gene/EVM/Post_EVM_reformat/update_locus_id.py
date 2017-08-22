@@ -89,9 +89,13 @@ def update_id(gff, ids, rewrite):
             mRNA_id = curr_mRNA[0]
             mRNA_rec = gff_db[mRNA_id]
             mRNA_rec_id = '{}.{}'.format(ids[gene.id], mRNA_count)
-            mRNA_attrs = dict(mRNA_rec.attributes)
-            mRNA_attrs['ID'] = [mRNA_rec_id]
-            mRNA_attrs['Parent'] = [ids[gene.id]]
+            #mRNA_attrs_raw = dict(mRNA_rec.attributes)
+            #for k in mRNA_attrs.keys():
+            #    if not k in ['ID', 'Parent']:
+            #        del mRNA_attrs[k]
+            #mRNA_attrs['ID'] = [mRNA_rec_id]
+            #mRNA_attrs['Parent'] = [ids[gene.id]]
+            mRNA_attrs = {'ID':[mRNA_rec_id], 'Parent':[ids[gene.id]], 'Name':[attrs['Name'][0]]}
             mRNA_rec_new = gffutils.Feature(
                 seqid=mRNA_rec.chrom,
                 source='Fairchild_v1.0',

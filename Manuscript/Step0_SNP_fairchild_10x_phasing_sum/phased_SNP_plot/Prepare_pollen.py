@@ -41,7 +41,10 @@ def pollen_haplotype(infile):
         pollens = ['Pollen41', 'Pollen42', 'Pollen43', 'Pollen44', 'Pollen45']
         chrs_last = ''
         pos_last  = 0
-        hap_last  = defaultdict(lambda : int())
+        hap_chr_last    = defaultdict(lambda : defaultdict(lambda : int()))
+        hap_chr_count   = defaultdict(lambda : defaultdict(lambda : int()))
+        hap_chr_data    = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda : list())))
+        hap_chr_hap     = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda : int())))
         for line in filehd:
             line = line.rstrip()
             if len(line) > 2: 
@@ -54,8 +57,6 @@ def pollen_haplotype(infile):
                     if not chrs_last == '':
                         data['hap1']['end'].append([chrs_last, pos_last])
                         data['hap2']['end'].append([chrs_last, pos_last])
-                    hap_last['hap1'] = 1
-                    hap_last['hap2'] = 2
                     #pollen
                     for i in range(3, 8):
                         pol = pollens[i-3]
@@ -66,15 +67,13 @@ def pollen_haplotype(infile):
                             hap = 2
                         else:
                             hap = 3
-                        if not chrs_last == '':
-                            data[pol]['end'].append([chrs_last, pos_last])
-                        if not hap == 0 and not hap == 3:
-                            data[pol]['start'].append([chrs, pos, hap])
-                            hap_last[pol] = hap
-                           
-                    pos_last  = pos
+                        if hap == 1 or hap == 2:
+                            hap_chr_count[pol][chrs] += 1
+                            hap_chr_data[pol][chrs][hap_chr_count[pol][chrs]].append(int(pos))
+                            hap_chr_hap[pol][chrs][hap_chr_count[pol][chrs]] = hap
+                            hap_chr_last[pol][chrs]   = hap
                     chrs_last = chrs
-                        
+                    pos_last  = pos    
                 else:
                     #pollen
                     for i in range(3, 8):
@@ -86,28 +85,26 @@ def pollen_haplotype(infile):
                             hap = 2
                         else:
                             hap = 3
-                        if hap == 3 or hap == 0:
-                            #chrs_last = chrs
-                            #pos_last  = pos
-                            pass
-                        elif hap == hap_last[pol]:
-                            #chrs_last = chrs
-                            #pos_last  = pos
-                            pass
-                        else:
-                            data[pol]['end'].append([chrs_last, pos_last])
-                            data[pol]['start'].append([chrs, pos, hap])
-                            hap_last[pol] = hap
-                            #chrs_last = chrs
-                            #pos_last  = pos
 
+                        if hap == 3 or hap == 0:
+                            pass
+                        elif hap == hap_chr_last[pol][chrs]:
+                            hap_chr_data[pol][chrs][hap_chr_count[pol][chrs]].append(int(pos))
+                            hap_chr_hap[pol][chrs][hap_chr_count[pol][chrs]] = hap
+                        else:
+                            hap_chr_count[pol][chrs] += 1
+                            hap_chr_data[pol][chrs][hap_chr_count[pol][chrs]].append(int(pos))
+                            hap_chr_hap[pol][chrs][hap_chr_count[pol][chrs]] = hap
+                            hap_chr_last[pol][chrs]   = hap 
+                        #data[pol]['end'].append([chrs_last, pos_last])
+                        #data[pol]['start'].append([chrs, pos, hap])
                     chrs_last = chrs
                     pos_last  = pos
         data['hap1']['end'].append([chrs_last, pos_last])
         data['hap2']['end'].append([chrs_last, pos_last])
-        for i in range(3, 8):
-            pol = pollens[i-3]
-            data[pol]['end'].append([chrs_last, pos_last])
+        #for i in range(3, 8):
+        #    pol = pollens[i-3]
+        #    data[pol]['end'].append([chrs_last, pos_last])
  
     samples = ['hap1', 'hap2', 'Pollen41', 'Pollen42', 'Pollen43', 'Pollen44', 'Pollen45']
     fh = defaultdict(lambda : str())
@@ -116,7 +113,7 @@ def pollen_haplotype(infile):
         ofile = open(fn, 'w')
         fh[sp] = ofile
 
-    for sp in data.keys():
+    for sp in ['hap1', 'hap2']:
         for i in range(len(data[sp]['start'])):
             #print >> fh[sp], '{}\t{}\t{}\t{}'.format(data[sp]['start'][i][0], data[sp]['start'][i][1], data[sp]['end'][i][0], data[sp]['end'][i][1])
             #if sp == 'hap1':
@@ -129,8 +126,26 @@ def pollen_haplotype(infile):
             except:
                 pass 
             #print >> fh[sp], '{}\t{}\t{}\t{}'.format(data[sp]['start'][i][0], data[sp]['start'][i][1], end_chrs, end_pos)
-            color = 'orange' if data[sp]['start'][i][2] == 1 else 'blue'
+            #color = 'orange' if data[sp]['start'][i][2] == 1 else 'blue'
+            color = 'gray'
+            if data[sp]['start'][i][2] == 1:
+                color = 'orange'
+            elif data[sp]['start'][i][2] == 2:
+                color = 'blue'
             print >> fh[sp], '{}\t{}\t{}\t{}\t{}\t+'.format(data[sp]['start'][i][0], data[sp]['start'][i][1], end_pos, data[sp]['start'][i][2], color)
+
+    for sp in ['Pollen41', 'Pollen42', 'Pollen43', 'Pollen44', 'Pollen45']:
+        for c in sorted(hap_chr_data[sp].keys()):
+            for block in sorted(hap_chr_data[sp][c].keys(), key=int):
+                start = np.min(hap_chr_data[sp][c][block])
+                end   = np.max(hap_chr_data[sp][c][block])
+                color = 'gray'
+                if hap_chr_hap[sp][c][block] == 1:
+                    color = 'orange'
+                elif hap_chr_hap[sp][c][block] == 2:
+                    color = 'blue'
+                print >> fh[sp], '{}\t{}\t{}\t{}\t{}\t+'.format(c, start, end, hap_chr_hap[sp][c][block], color)
+
     for sp in samples:
         temp = fh[sp]
         temp.close()
